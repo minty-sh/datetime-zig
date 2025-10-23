@@ -11,28 +11,34 @@ fn humanize_future(seconds: i64, allocator: std.mem.Allocator) ![]u8 {
         if (seconds == 1) return std.fmt.allocPrint(allocator, "in 1 second", .{});
         return std.fmt.allocPrint(allocator, "in {d} seconds", .{seconds});
     }
+
     const minutes = @divFloor(seconds, 60);
     if (minutes < 60) {
         if (minutes == 1) return std.fmt.allocPrint(allocator, "in 1 minute", .{});
         return std.fmt.allocPrint(allocator, "in {d} minutes", .{minutes});
     }
+
     const hours = @divFloor(minutes, 60);
     if (hours < 24) {
         if (hours == 1) return std.fmt.allocPrint(allocator, "in 1 hour", .{});
         return std.fmt.allocPrint(allocator, "in {d} hours", .{hours});
     }
+
     const days = @divFloor(hours, 24);
     if (days < 30) {
         if (days == 1) return std.fmt.allocPrint(allocator, "in 1 day", .{});
         return std.fmt.allocPrint(allocator, "in {d} days", .{days});
     }
+
     const months = @divFloor(days, 30);
     if (months < 12) {
         if (months == 1) return std.fmt.allocPrint(allocator, "in 1 month", .{});
         return std.fmt.allocPrint(allocator, "in {d} months", .{months});
     }
+
     const years = @divFloor(months, 12);
     if (years == 1) return std.fmt.allocPrint(allocator, "in 1 year", .{});
+
     return std.fmt.allocPrint(allocator, "in {d} years", .{years});
 }
 
@@ -41,28 +47,34 @@ fn humanize_past(seconds: i64, allocator: std.mem.Allocator) ![]u8 {
         if (seconds == 1) return std.fmt.allocPrint(allocator, "1 second ago", .{});
         return std.fmt.allocPrint(allocator, "{d} seconds ago", .{seconds});
     }
+
     const minutes = @divFloor(seconds, 60);
     if (minutes < 60) {
         if (minutes == 1) return std.fmt.allocPrint(allocator, "1 minute ago", .{});
         return std.fmt.allocPrint(allocator, "{d} minutes ago", .{minutes});
     }
+
     const hours = @divFloor(minutes, 60);
     if (hours < 24) {
         if (hours == 1) return std.fmt.allocPrint(allocator, "1 hour ago", .{});
         return std.fmt.allocPrint(allocator, "{d} hours ago", .{hours});
     }
+
     const days = @divFloor(hours, 24);
     if (days < 30) {
         if (days == 1) return std.fmt.allocPrint(allocator, "1 day ago", .{});
         return std.fmt.allocPrint(allocator, "{d} days ago", .{days});
     }
+
     const months = @divFloor(days, 30);
     if (months < 12) {
         if (months == 1) return std.fmt.allocPrint(allocator, "1 month ago", .{});
         return std.fmt.allocPrint(allocator, "{d} months ago", .{months});
     }
+
     const years = @divFloor(months, 12);
     if (years == 1) return std.fmt.allocPrint(allocator, "1 year ago", .{});
+
     return std.fmt.allocPrint(allocator, "{d} years ago", .{years});
 }
 
@@ -93,6 +105,7 @@ fn transitionCompare(context: i64, item: std.tz.Transition) std.math.Order {
     return std.math.order(context, item.ts);
 }
 
+/// Represents a unit of time for truncation and rounding operations.
 pub const TimeUnit = enum {
     year,
     month,
@@ -102,6 +115,7 @@ pub const TimeUnit = enum {
     second,
 };
 
+/// Represents the days of the week, Sunday through Saturday.
 pub const DayOfWeek = enum(u3) {
     sunday,
     monday,
@@ -112,6 +126,7 @@ pub const DayOfWeek = enum(u3) {
     saturday,
 };
 
+/// Represents a duration in seconds.
 pub const Duration = struct {
     seconds: i64,
 
@@ -120,6 +135,7 @@ pub const Duration = struct {
     }
 };
 
+/// Represents a specific point in time, with a Unix timestamp and an offset from UTC.
 pub const DateTime = struct {
     /// seconds since Unix epoch (1970-01-01T00:00:00Z)
     unix_secs: i64,
@@ -284,7 +300,7 @@ pub const DateTime = struct {
         const minute = @as(u8, @divFloor(rem, 60));
         const second = @as(u8, @mod(rem, 60));
 
-        const result = civil_from_days(days);
+        const result = CivilDate.from_days(days);
         const y = result.year;
         const m = result.month;
         const d = result.day;
@@ -344,7 +360,7 @@ pub const DateTime = struct {
     pub fn formatDate(self: DateTime, allocator: std.mem.Allocator) ![]u8 {
         const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
         const days = @divFloor(local_secs, 86400);
-        const result = civil_from_days(days);
+        const result = CivilDate.from_days(days);
         const y = result.year;
         const m = result.month;
         const d = result.day;
@@ -361,41 +377,50 @@ pub const DateTime = struct {
         write2digits(out, &idx, @intCast(d));
         return out;
     }
+
     /// Return CivilDate (year, month, day) for this DateTime in its own offset.
     pub fn toCivilDate(self: DateTime) CivilDate {
         const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
         const days = @divFloor(local_secs, 86400);
-        return civil_from_days(days);
+        return CivilDate.from_days(days);
     }
 
+    /// Calculates the duration between two DateTime instances.
     pub fn diff(self: DateTime, other: DateTime) Duration {
         return Duration.fromSeconds(self.unix_secs - other.unix_secs);
     }
 
+    /// Adds a duration to this DateTime instance, returning a new DateTime.
     pub fn add(self: DateTime, d: Duration) DateTime {
         return DateTime.fromUnix(self.unix_secs + d.seconds, self.offset_seconds);
     }
 
+    /// Subtracts a duration from this DateTime instance, returning a new DateTime.
     pub fn sub(self: DateTime, d: Duration) DateTime {
         return DateTime.fromUnix(self.unix_secs - d.seconds, self.offset_seconds);
     }
 
+    /// Adds a specified number of days to the DateTime.
     pub fn addDays(self: DateTime, days: i64) DateTime {
         return self.add(Duration.fromSeconds(days * 86400));
     }
 
+    /// Subtracts a specified number of days from the DateTime.
     pub fn subDays(self: DateTime, days: i64) DateTime {
         return self.sub(Duration.fromSeconds(days * 86400));
     }
 
+    /// Adds a specified number of weeks to the DateTime.
     pub fn addWeeks(self: DateTime, weeks: i64) DateTime {
         return self.add(Duration.fromSeconds(weeks * 7 * 86400));
     }
 
+    /// Subtracts a specified number of weeks from the DateTime.
     pub fn subWeeks(self: DateTime, weeks: i64) DateTime {
         return self.sub(Duration.fromSeconds(weeks * 7 * 86400));
     }
 
+    /// Adds a specified number of months to the DateTime. Handles day clamping (e.g., adding 1 month to Jan 31st results in Feb 28th/29th).
     pub fn addMonths(self: DateTime, months: i64) !DateTime {
         const cd = self.toCivilDate();
         const total_months = @as(i64, cd.year) * 12 + @as(i64, cd.month - 1) + months;
@@ -421,10 +446,12 @@ pub const DateTime = struct {
         return DateTime.fromComponents(@intCast(new_year), new_month, @intCast(new_day), hour, minute, second, self.offset_seconds);
     }
 
+    /// Subtracts a specified number of months from the DateTime. Delegates to addMonths with a negative value.
     pub fn subMonths(self: DateTime, months: i64) !DateTime {
         return self.addMonths(-months);
     }
 
+    /// Adds a specified number of years to the DateTime. Handles leap year day clamping (e.g., adding 1 year to Feb 29th in a non-leap year results in Feb 28th).
     pub fn addYears(self: DateTime, years: i64) !DateTime {
         const cd = self.toCivilDate();
         const new_year: i64 = @as(i64, cd.year) + years;
@@ -447,16 +474,19 @@ pub const DateTime = struct {
         return DateTime.fromComponents(@intCast(new_year), @intCast(cd.month), @intCast(new_day), hour, minute, second, self.offset_seconds);
     }
 
+    /// Subtracts a specified number of years from the DateTime. Delegates to addYears with a negative value.
     pub fn subYears(self: DateTime, years: i64) !DateTime {
         return self.addYears(-years);
     }
 
+    /// Returns the day of the week for this DateTime.
     pub fn dayOfWeek(self: DateTime) DayOfWeek {
         const days = @divFloor(self.unix_secs, 86400);
         const dow = @mod(days + 4, 7);
         return @enumFromInt(@as(u3, @intCast(dow)));
     }
 
+    /// Returns true if the DateTime falls on a weekday (Monday-Friday).
     pub fn isWeekday(self: DateTime) bool {
         return switch (self.dayOfWeek()) {
             .saturday, .sunday => false,
@@ -464,10 +494,12 @@ pub const DateTime = struct {
         };
     }
 
+    /// Returns true if the DateTime falls on a weekend (Saturday or Sunday).
     pub fn isWeekend(self: DateTime) bool {
         return !self.isWeekday();
     }
 
+    /// Adds a specified number of business days (Monday-Friday) to the DateTime. Skips weekends.
     pub fn addBusinessDays(self: DateTime, days: i64) DateTime {
         var result = self;
         var d: i64 = 0;
@@ -483,6 +515,7 @@ pub const DateTime = struct {
         return result;
     }
 
+    /// Returns the day of the year (1-366) for this DateTime.
     pub fn dayOfYear(self: DateTime) u16 {
         const cd = self.toCivilDate();
         const first_day_of_year = days_from_civil(cd.year, 1, 1);
@@ -490,6 +523,7 @@ pub const DateTime = struct {
         return @intCast(this_day - first_day_of_year + 1);
     }
 
+    /// Returns the ISO week date (year and week number) for this DateTime.
     pub fn isoWeek(self: DateTime) !struct { year: i32, week: u8 } {
         const dow = self.dayOfWeek(); // sunday=0
         const iso_dow = if (dow == .sunday) 7 else @intFromEnum(dow);
@@ -513,6 +547,7 @@ pub const DateTime = struct {
         return .{ .year = iso_year, .week = @intCast(week_num) };
     }
 
+    /// Truncates the DateTime to the beginning of the specified TimeUnit.
     pub fn truncate(self: DateTime, unit: TimeUnit) !DateTime {
         const cd = self.toCivilDate();
         const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
@@ -535,6 +570,7 @@ pub const DateTime = struct {
         };
     }
 
+    /// Rounds the DateTime to the nearest specified TimeUnit. Rounds up for half or more.
     pub fn round(self: DateTime, unit: TimeUnit) !DateTime {
         const cd = self.toCivilDate();
         const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
@@ -586,6 +622,8 @@ pub const DateTime = struct {
         }
     }
 
+    /// Formats the DateTime according to the provided format string.
+    /// Recognizes common format specifiers like %Y, %m, %d, %H, %M, %S, %B, %b, %A, %a.
     pub fn strftime(self: DateTime, allocator: std.mem.Allocator, fmt_str: []const u8) ![]u8 {
         var result = std.ArrayList(u8).init(allocator);
         const writer = result.writer();
@@ -633,6 +671,7 @@ pub const DateTime = struct {
         return result.toOwnedSlice();
     }
 
+    /// Returns a human-readable string representing the time difference between this DateTime and a given 'now' DateTime.
     pub fn humanize(self: DateTime, now: DateTime, allocator: std.mem.Allocator) ![]u8 {
         const diff_secs = self.unix_secs - now.unix_secs;
 
@@ -643,7 +682,9 @@ pub const DateTime = struct {
         }
     }
 
+    /// Converts this DateTime to a different timezone specified by `tz_name`.
     pub fn toTimezone(self: DateTime, allocator: std.mem.Allocator, tz_name: []const u8) !DateTime {
+        // TODO: Linux-only
         const tz_path = try std.fmt.allocPrint(allocator, "/usr/share/zoneinfo/{s}", .{tz_name});
         defer allocator.free(tz_path);
 
@@ -712,28 +753,29 @@ pub const CivilDate = struct {
     year: i32,
     month: i32,
     day: i32,
+
+    /// inverse: civil_from_days(days_since_epoch) -> (year, month, day)
+    pub fn from_days(z: i64) CivilDate {
+        const z_i = @as(i64, z) + 719468;
+        const era = if (z_i >= 0) @divFloor(z_i, 146097) else @divFloor(z_i - 146096, 146097);
+        const doe = @as(i64, z_i - era * 146097);
+        const yoe = @divFloor(@as(i64, (@divFloor(doe, 1) - @divFloor(doe, 1460) + @divFloor(doe, 36524) - @divFloor(doe, 146096))), 365);
+        const yoe_i32: i32 = @intCast(yoe);
+        const era_i32: i32 = @intCast(era);
+        const y = yoe_i32 + era_i32 * 400;
+        const doe_i32: i32 = @intCast(doe);
+        const yoe_i32_for_doy: i32 = @intCast(yoe);
+        const doy = doe_i32 - (365 * yoe_i32_for_doy + @divFloor(yoe_i32_for_doy, 4) - @divFloor(yoe_i32_for_doy, 100));
+        const mp: i32 = @intCast(@divFloor((5 * @as(i64, doy) + 2), 153));
+        const d = @as(i32, doy - @divFloor(153 * mp + 2, 5) + 1);
+        const m = @as(i32, mp + @as(i32, if (mp < 10) 3 else -9));
+        var y_var = y;
+        y_var = y_var + @as(i32, if (m <= 2) 1 else 0);
+        return CivilDate{ .year = y_var, .month = m, .day = d };
+    }
 };
 
-/// inverse: civil_from_days(days_since_epoch) -> (year, month, day)
-fn civil_from_days(z: i64) CivilDate {
-    const z_i = @as(i64, z) + 719468;
-    const era = if (z_i >= 0) @divFloor(z_i, 146097) else @divFloor(z_i - 146096, 146097);
-    const doe = @as(i64, z_i - era * 146097);
-    const yoe = @divFloor(@as(i64, (@divFloor(doe, 1) - @divFloor(doe, 1460) + @divFloor(doe, 36524) - @divFloor(doe, 146096))), 365);
-    const yoe_i32: i32 = @intCast(yoe);
-    const era_i32: i32 = @intCast(era);
-    const y = yoe_i32 + era_i32 * 400;
-    const doe_i32: i32 = @intCast(doe);
-    const yoe_i32_for_doy: i32 = @intCast(yoe);
-    const doy = doe_i32 - (365 * yoe_i32_for_doy + @divFloor(yoe_i32_for_doy, 4) - @divFloor(yoe_i32_for_doy, 100));
-    const mp: i32 = @intCast(@divFloor((5 * @as(i64, doy) + 2), 153));
-    const d = @as(i32, doy - @divFloor(153 * mp + 2, 5) + 1);
-    const m = @as(i32, mp + @as(i32, if (mp < 10) 3 else -9));
-    var y_var = y;
-    y_var = y_var + @as(i32, if (m <= 2) 1 else 0);
-    return CivilDate{ .year = y_var, .month = m, .day = d };
-}
-
+/// An error that may happen while parsing arguments or date-string formatted strings
 pub const DateError = error{
     BadFormat,
     InvalidMonth,
