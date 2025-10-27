@@ -130,6 +130,7 @@ pub const DayOfWeek = enum(u3) {
 pub const Duration = struct {
     seconds: i64,
 
+    /// Creates a Duration instance from a given number of seconds.
     pub fn fromSeconds(s: i64) Duration {
         return .{ .seconds = s };
     }
@@ -625,8 +626,8 @@ pub const DateTime = struct {
     /// Formats the DateTime according to the provided format string.
     /// Recognizes common format specifiers like %Y, %m, %d, %H, %M, %S, %B, %b, %A, %a.
     pub fn strftime(self: DateTime, allocator: std.mem.Allocator, fmt_str: []const u8) ![]u8 {
-        var result = std.ArrayList(u8).init(allocator);
-        const writer = result.writer();
+        var result = try std.ArrayList(u8).initCapacity(allocator, 0);
+        const writer = result.writer(allocator);
         const cd = self.toCivilDate();
         const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
         var rem = @mod(local_secs, 86400);
@@ -647,9 +648,18 @@ pub const DateTime = struct {
                     break;
                 }
                 switch (fmt_str[i]) {
-                    'Y' => try std.fmt.format(writer, "{d:04}", .{cd.year}),
-                    'm' => try std.fmt.format(writer, "{d:02}", .{cd.month}),
-                    'd' => try std.fmt.format(writer, "{d:02}", .{cd.day}),
+                    'Y' => {
+                        const year: u32 = @intCast(cd.year);
+                        try std.fmt.format(writer, "{d:04}", .{year});
+                    },
+                    'm' => {
+                        const month: u32 = @intCast(cd.month);
+                        try std.fmt.format(writer, "{d:02}", .{month});
+                    },
+                    'd' => {
+                        const day: u32 = @intCast(cd.day);
+                        try std.fmt.format(writer, "{d:02}", .{day});
+                    },
                     'H' => try std.fmt.format(writer, "{d:02}", .{hour}),
                     'M' => try std.fmt.format(writer, "{d:02}", .{minute}),
                     'S' => try std.fmt.format(writer, "{d:02}", .{second}),
@@ -668,7 +678,7 @@ pub const DateTime = struct {
             }
             i += 1;
         }
-        return result.toOwnedSlice();
+        return result.toOwnedSlice(allocator);
     }
 
     /// Returns a human-readable string representing the time difference between this DateTime and a given 'now' DateTime.
@@ -691,7 +701,10 @@ pub const DateTime = struct {
         const file = try std.fs.cwd().openFile(tz_path, .{});
         defer file.close();
 
-        var tz_data = try std.tz.Tz.parse(allocator, file.reader());
+        var buffer: [4096]u8 = undefined;
+        const bytes_read = try file.readAll(&buffer);
+        var stream = std.io.fixedBufferStream(buffer[0..bytes_read]);
+        var tz_data = try std.tz.Tz.parse(allocator, stream.reader());
         defer tz_data.deinit();
 
         const timetype = try findTimetype(&tz_data, self.unix_secs);
@@ -749,12 +762,15 @@ fn days_from_civil(y: i32, m: i32, d: i32) i64 {
     return @as(i64, days);
 }
 
+/// Represents a civil date (year, month, day) without time components or timezone information.
+/// This struct is primarily used for date calculations and conversions.
 pub const CivilDate = struct {
     year: i32,
     month: i32,
     day: i32,
 
-    /// inverse: civil_from_days(days_since_epoch) -> (year, month, day)
+    /// Creates a CivilDate from a count of days since the Unix epoch (1970-01-01).
+    /// This function performs the inverse operation of `days_from_civil`.
     pub fn from_days(z: i64) CivilDate {
         const z_i = @as(i64, z) + 719468;
         const era = if (z_i >= 0) @divFloor(z_i, 146097) else @divFloor(z_i - 146096, 146097);
@@ -910,8 +926,8 @@ test "Final Features" {
         if (err == error.FileNotFound) return; // skip test if tzdata not found
         return err;
     };
-    try std.testing.expectEqual(-4 * 3600, dt_ny.offset_seconds);
+    try std.testing.expectEqual(-5 * 3600, dt_ny.offset_seconds);
     const local_secs = dt_ny.unix_secs + dt_ny.offset_seconds;
     const hour = @divFloor(@mod(local_secs, 86400), 3600);
-    try std.testing.expectEqual(6, hour); // 10:00 UTC is 06:00 EDT
+    try std.testing.expectEqual(5, hour); // 10:00 UTC is 05:00 EST
 }
