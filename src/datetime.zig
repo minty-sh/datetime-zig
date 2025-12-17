@@ -172,10 +172,10 @@ pub const DateTime = struct {
         if (rem < 0) {
             rem += 86400;
         }
-        const hour = @as(u8, @divFloor(rem, 3600));
+        const hour: u8 = @intCast(@divFloor(rem, 3600));
         rem = @mod(rem, 3600);
-        const minute = @as(u8, @divFloor(rem, 60));
-        const second = @as(u8, @mod(rem, 60));
+        const minute: u8 = @intCast(@divFloor(rem, 60));
+        const second: u8 = @intCast(@mod(rem, 60));
 
         const result = CivilDate.from_days(days);
         const y = result.year;
@@ -189,17 +189,17 @@ pub const DateTime = struct {
             tz_buf[0] = 'Z';
             tz_slice = tz_buf[0..1];
         } else {
-            const sign = if (self.offset_seconds >= 0) '+' else '-';
+            const sign: u8 = if (self.offset_seconds >= 0) '+' else '-';
             const off_abs = if (self.offset_seconds >= 0) self.offset_seconds else -self.offset_seconds;
             const off_h = @divFloor(off_abs, 3600);
-            const off_m = @mod(off_abs, 3600) / 60;
+            const off_m = @divFloor(@mod(off_abs, 3600), 60);
             // format into tz_buf
             tz_buf[0] = @as(u8, sign);
-            tz_buf[1] = parse.charDigit(@divFloor(off_h, 10));
-            tz_buf[2] = parse.charDigit(@mod(off_h, 10));
+            tz_buf[1] = parse.charDigit(@intCast(@divFloor(off_h, 10)));
+            tz_buf[2] = parse.charDigit(@intCast(@mod(off_h, 10)));
             tz_buf[3] = ':';
-            tz_buf[4] = parse.charDigit(@divFloor(off_m, 10));
-            tz_buf[5] = parse.charDigit(@mod(off_m, 10));
+            tz_buf[4] = parse.charDigit(@intCast(@divFloor(off_m, 10)));
+            tz_buf[5] = parse.charDigit(@intCast(@mod(off_m, 10)));
             tz_slice = tz_buf[0..6];
         }
 
@@ -229,7 +229,7 @@ pub const DateTime = struct {
         idx += 1;
         parse.write2digits(out, &idx, second);
         // tz
-        std.mem.copy(u8, out[idx..], tz_slice);
+        std.mem.copyForwards(u8, out[idx..], tz_slice);
         return out;
     }
 
@@ -315,10 +315,10 @@ pub const DateTime = struct {
         if (rem < 0) {
             rem += 86400;
         }
-        const hour = @as(u8, @intCast(@divFloor(rem, 3600)));
+        const hour: u8 = @intCast(@divFloor(rem, 3600));
         rem = @mod(rem, 3600);
-        const minute = @as(u8, @intCast(@divFloor(rem, 60)));
-        const second = @as(u8, @intCast(@mod(rem, 60)));
+        const minute: u8 = @intCast(@divFloor(rem, 60));
+        const second: u8 = @intCast(@mod(rem, 60));
 
         return DateTime.fromComponents(@intCast(new_year), new_month, @intCast(new_day), hour, minute, second, self.offset_seconds);
     }
@@ -343,10 +343,10 @@ pub const DateTime = struct {
         if (rem < 0) {
             rem += 86400;
         }
-        const hour = @as(u8, @intCast(@divFloor(rem, 3600)));
+        const hour: u8 = @intCast(@divFloor(rem, 3600));
         rem = @mod(rem, 3600);
-        const minute = @as(u8, @intCast(@divFloor(rem, 60)));
-        const second = @as(u8, @intCast(@mod(rem, 60)));
+        const minute: u8 = @intCast(@divFloor(rem, 60));
+        const second: u8 = @intCast(@mod(rem, 60));
 
         return DateTime.fromComponents(@intCast(new_year), @intCast(cd.month), @intCast(new_day), hour, minute, second, self.offset_seconds);
     }
@@ -432,10 +432,10 @@ pub const DateTime = struct {
         if (rem < 0) {
             rem += 86400;
         }
-        const hour = @as(u8, @intCast(@divFloor(rem, 3600)));
+        const hour: u8 = @intCast(@divFloor(rem, 3600));
         rem = @mod(rem, 3600);
-        const minute = @as(u8, @intCast(@divFloor(rem, 60)));
-        const second = @as(u8, @intCast(@mod(rem, 60)));
+        const minute: u8 = @intCast(@divFloor(rem, 60));
+        const second: u8 = @intCast(@mod(rem, 60));
 
         return switch (unit) {
             .year => DateTime.fromComponents(cd.year, 1, 1, 0, 0, 0, self.offset_seconds),
@@ -455,10 +455,10 @@ pub const DateTime = struct {
         if (rem < 0) {
             rem += 86400;
         }
-        const hour = @as(u8, @intCast(@divFloor(rem, 3600)));
+        const hour: u8 = @intCast(@divFloor(rem, 3600));
         rem = @mod(rem, 3600);
-        const minute = @as(u8, @intCast(@divFloor(rem, 60)));
-        const second = @as(u8, @intCast(@mod(rem, 60)));
+        const minute: u8 = @intCast(@divFloor(rem, 60));
+        const second: u8 = @intCast(@mod(rem, 60));
 
         switch (unit) {
             .year => {
@@ -510,10 +510,10 @@ pub const DateTime = struct {
         if (rem < 0) {
             rem += 86400;
         }
-        const hour = @as(u8, @intCast(@divFloor(rem, 3600)));
+        const hour: u8 = @intCast(@divFloor(rem, 3600));
         rem = @mod(rem, 3600);
-        const minute = @as(u8, @intCast(@divFloor(rem, 60)));
-        const second = @as(u8, @intCast(@mod(rem, 60)));
+        const minute: u8 = @intCast(@divFloor(rem, 60));
+        const second: u8 = @intCast(@mod(rem, 60));
 
         var i: usize = 0;
         while (i < fmt_str.len) {
@@ -596,3 +596,272 @@ pub const DateTime = struct {
         }
     }
 };
+
+test "DateTime creation" {
+    const testing = std.testing;
+
+    // Test fromUnix and fromUnixEpoch
+    const dt_unix = DateTime.fromUnix(1672531200, 3600); // 2023-01-01 01:00:00 +01:00
+    try testing.expectEqual(@as(i64, 1672531200), dt_unix.unix_secs);
+    try testing.expectEqual(@as(i32, 3600), dt_unix.offset_seconds);
+
+    const dt_epoch = DateTime.fromUnixEpoch(0); // 1970-01-01 00:00:00Z
+    try testing.expectEqual(@as(i64, 0), dt_epoch.unix_secs);
+    try testing.expectEqual(@as(i32, 0), dt_epoch.offset_seconds);
+
+    // Test fromComponents - valid
+    const dt_comp = try DateTime.fromComponents(2023, 10, 27, 10, 30, 0, 0);
+    // 2023-10-27 is 19657 days since epoch
+    const expected_secs: i64 = 19657 * 86400 + 10 * 3600 + 30 * 60;
+    try testing.expectEqual(expected_secs, dt_comp.unix_secs);
+
+    // Test fromComponents - with offset
+    const dt_comp_offset = try DateTime.fromComponents(2023, 10, 27, 10, 30, 0, -3600);
+    try testing.expectEqual(expected_secs + 3600, dt_comp_offset.unix_secs);
+
+    // Test fromComponents - invalid month
+    try testing.expectError(DateError.InvalidMonth, DateTime.fromComponents(2023, 13, 1, 0, 0, 0, 0));
+
+    // Test fromComponents - invalid day
+    try testing.expectError(DateError.InvalidDay, DateTime.fromComponents(2023, 2, 29, 0, 0, 0, 0)); // 2023 not a leap year
+
+    // Test fromComponents - invalid time
+    try testing.expectError(DateError.InvalidTime, DateTime.fromComponents(2023, 1, 1, 24, 0, 0, 0));
+}
+
+test "DateTime RFC3339" {
+    const testing = std.testing;
+    const allocator = testing.allocator;
+
+    // Test fromRfc3339
+    const dt_z = try DateTime.fromRfc3339("2023-01-01T12:00:00Z");
+    try testing.expectEqual(@as(i64, 1672574400), dt_z.unix_secs);
+    try testing.expectEqual(@as(i32, 0), dt_z.offset_seconds);
+
+    const dt_offset = try DateTime.fromRfc3339("2023-01-01T13:00:00+01:00");
+    try testing.expectEqual(@as(i64, 1672574400), dt_offset.unix_secs);
+    try testing.expectEqual(@as(i32, 3600), dt_offset.offset_seconds);
+
+    const dt_neg_offset = try DateTime.fromRfc3339("2023-01-01T11:00:00-01:00");
+    try testing.expectEqual(@as(i64, 1672574400), dt_neg_offset.unix_secs);
+    try testing.expectEqual(@as(i32, -3600), dt_neg_offset.offset_seconds);
+
+    const dt_frac = try DateTime.fromRfc3339("2023-01-01T12:00:00.12345Z");
+    try testing.expectEqual(@as(i64, 1672574400), dt_frac.unix_secs);
+
+    const dt_date_only = try DateTime.fromRfc3339("2023-01-01");
+    const expected_date_only_secs: i64 = CivilDate.days_since_unix_epoch(2023, 1, 1) * 86400;
+    try testing.expectEqual(expected_date_only_secs, dt_date_only.unix_secs);
+
+    // Test formatRfc3339
+    const dt_to_format = DateTime.fromUnix(1672574400, 3600); // 2023-01-01 13:00:00 +01:00
+    const formatted = try dt_to_format.formatRfc3339(allocator);
+    defer allocator.free(formatted);
+    try testing.expectEqualStrings("2023-01-01T13:00:00+01:00", formatted);
+
+    const dt_to_format_z = DateTime.fromUnixEpoch(1672574400); // 2023-01-01 12:00:00Z
+    const formatted_z = try dt_to_format_z.formatRfc3339(allocator);
+    defer allocator.free(formatted_z);
+    try testing.expectEqualStrings("2023-01-01T12:00:00Z", formatted_z);
+
+    // Roundtrip test
+    const original_dt = DateTime.fromUnix(1234567890, -7 * 3600);
+    const formatted_rt = try original_dt.formatRfc3339(allocator);
+    defer allocator.free(formatted_rt);
+    const roundtrip_dt = try DateTime.fromRfc3339(formatted_rt);
+    try testing.expectEqual(original_dt.unix_secs, roundtrip_dt.unix_secs);
+    // fromRfc3339 will parse the offset, but the original offset is lost if not encoded in the string
+    // Let's check if the final offset is the same as the one we parsed
+    try testing.expectEqual(original_dt.offset_seconds, roundtrip_dt.offset_seconds);
+}
+
+test "DateTime component accessors and formatDate" {
+    const testing = std.testing;
+    const allocator = testing.allocator;
+
+    const dt_utc = DateTime.fromUnixEpoch(0); // 1970-01-01 00:00:00Z (Thursday)
+    const dt_local = try DateTime.fromComponents(2023, 10, 27, 10, 30, 0, 3600); // 2023-10-27 10:30:00+01:00 (Friday)
+
+    // test toCivilDate
+    const cd_utc = dt_utc.toCivilDate();
+    try testing.expectEqual(1970, cd_utc.year);
+    try testing.expectEqual(1, cd_utc.month);
+    try testing.expectEqual(1, cd_utc.day);
+
+    const cd_local = dt_local.toCivilDate();
+    try testing.expectEqual(2023, cd_local.year);
+    try testing.expectEqual(10, cd_local.month);
+    try testing.expectEqual(27, cd_local.day);
+
+    // test dayOfWeek
+    try testing.expectEqual(time_units.DayOfWeek.thursday, dt_utc.dayOfWeek());
+    try testing.expectEqual(time_units.DayOfWeek.friday, dt_local.dayOfWeek());
+
+    // test dayOfYear
+    try testing.expectEqual(@as(u16, 1), dt_utc.dayOfYear());
+    try testing.expectEqual(@as(u16, 300), dt_local.dayOfYear()); // 2023-10-27 is the 300th day of 2023
+
+    // test isoWeek
+    const iso_week = try dt_local.isoWeek();
+    try testing.expectEqual(@as(i32, 2023), iso_week.year);
+    try testing.expectEqual(@as(u8, 43), iso_week.week); // 2023-10-27 is in ISO week 43
+
+    const dt_jan_1 = try DateTime.fromComponents(2004, 1, 1, 0, 0, 0, 0);
+    const iso_week_jan_1 = try dt_jan_1.isoWeek(); // Thursday
+    try testing.expectEqual(@as(i32, 2004), iso_week_jan_1.year);
+    try testing.expectEqual(@as(u8, 1), iso_week_jan_1.week);
+
+    // test formatDate
+    const formatted_date = try dt_local.formatDate(allocator);
+    defer allocator.free(formatted_date);
+    try testing.expectEqualStrings("2023-10-27", formatted_date);
+}
+
+test "DateTime arithmetic" {
+    const testing = std.testing;
+    const dt1 = DateTime.fromUnixEpoch(0); // 1970-01-01 00:00:00Z
+    const dt2 = DateTime.fromUnixEpoch(86400); // 1970-01-02 00:00:00Z
+    const dt_future = try DateTime.fromComponents(2024, 1, 1, 0, 0, 0, 0); // 2024-01-01 is a Monday
+    const dt_base = try DateTime.fromComponents(2023, 10, 27, 10, 0, 0, 0); // 2023-10-27 is a Friday
+
+    // test diff
+    const duration = dt2.diff(dt1);
+    try testing.expectEqual(@as(i64, 86400), duration.seconds);
+
+    // test add/sub Duration
+    const dt_add_dur = dt1.add(Duration.fromSeconds(3600));
+    try testing.expectEqual(@as(i64, 3600), dt_add_dur.unix_secs);
+    const dt_sub_dur = dt1.sub(Duration.fromSeconds(3600));
+    try testing.expectEqual(@as(i64, -3600), dt_sub_dur.unix_secs);
+
+    // test addDays/subDays
+    const dt_add_day = dt1.addDays(1);
+    try testing.expectEqual(dt2.unix_secs, dt_add_day.unix_secs);
+    const dt_sub_day = dt2.subDays(1);
+    try testing.expectEqual(dt1.unix_secs, dt_sub_day.unix_secs);
+
+    // test addWeeks/subWeeks
+    const dt_add_week = dt1.addWeeks(1);
+    try testing.expectEqual(@as(i64, 7 * 86400), dt_add_week.unix_secs);
+    const dt_sub_week = dt_add_week.subWeeks(1);
+    try testing.expectEqual(dt1.unix_secs, dt_sub_week.unix_secs);
+
+    // test addBusinessDays
+    // 2023-10-27 (Fri) + 1 business day = 2023-10-30 (Mon)
+    const dt_plus_1_biz_day = dt_base.addBusinessDays(1);
+    try testing.expectEqual(@as(i64, CivilDate.days_since_unix_epoch(2023, 10, 30) * 86400 + 10 * 3600), dt_plus_1_biz_day.unix_secs);
+
+    // 2023-10-27 (Fri) + 3 business days = 2023-11-01 (Wed)
+    const dt_plus_3_biz_day = dt_base.addBusinessDays(3);
+    try testing.expectEqual(@as(i64, CivilDate.days_since_unix_epoch(2023, 11, 1) * 86400 + 10 * 3600), dt_plus_3_biz_day.unix_secs);
+
+    // 2024-01-01 (Mon) - 1 business day = 2023-12-29 (Fri)
+    const dt_minus_1_biz_day = dt_future.addBusinessDays(-1);
+    try testing.expectEqual(@as(i64, CivilDate.days_since_unix_epoch(2023, 12, 29) * 86400), dt_minus_1_biz_day.unix_secs);
+
+    // test addMonths / subMonths
+    const dt_jan_31 = try DateTime.fromComponents(2023, 1, 31, 0, 0, 0, 0);
+    const dt_feb_clamp = try dt_jan_31.addMonths(1); // Should clamp to Feb 28
+    try testing.expectEqual(2023, dt_feb_clamp.toCivilDate().year);
+    try testing.expectEqual(2, dt_feb_clamp.toCivilDate().month);
+    try testing.expectEqual(28, dt_feb_clamp.toCivilDate().day);
+
+    const dt_march_31 = try DateTime.fromComponents(2023, 3, 31, 0, 0, 0, 0);
+    const dt_april_30 = try dt_march_31.addMonths(1); // Should clamp to April 30
+    try testing.expectEqual(2023, dt_april_30.toCivilDate().year);
+    try testing.expectEqual(4, dt_april_30.toCivilDate().month);
+    try testing.expectEqual(30, dt_april_30.toCivilDate().day);
+
+    const dt_prev_year = try dt_jan_31.subMonths(1); // Should be Dec 31 of previous year
+    try testing.expectEqual(2022, dt_prev_year.toCivilDate().year);
+    try testing.expectEqual(12, dt_prev_year.toCivilDate().month);
+    try testing.expectEqual(31, dt_prev_year.toCivilDate().day);
+
+    // test addYears / subYears
+    const dt_leap_feb_29 = try DateTime.fromComponents(2024, 2, 29, 0, 0, 0, 0); // Leap year
+    const dt_add_year_non_leap = try dt_leap_feb_29.addYears(1); // Add 1 year, 2025 is not leap
+    try testing.expectEqual(2025, dt_add_year_non_leap.toCivilDate().year);
+    try testing.expectEqual(2, dt_add_year_non_leap.toCivilDate().month);
+    try testing.expectEqual(28, dt_add_year_non_leap.toCivilDate().day); // Clamped to Feb 28
+
+    const dt_add_year_leap = try dt_leap_feb_29.addYears(4); // Add 4 years, 2028 is leap
+    try testing.expectEqual(2028, dt_add_year_leap.toCivilDate().year);
+    try testing.expectEqual(2, dt_add_year_leap.toCivilDate().month);
+    try testing.expectEqual(29, dt_add_year_leap.toCivilDate().day); // Still Feb 29
+}
+
+test "DateTime day type checks" {
+    const testing = std.testing;
+
+    // 1970-01-01 was a Thursday (weekday)
+    const dt_weekday = DateTime.fromUnixEpoch(0);
+    try testing.expect(dt_weekday.isWeekday());
+    try testing.expect(!dt_weekday.isWeekend());
+
+    // 1970-01-03 was a Saturday (weekend)
+    const dt_weekend = DateTime.fromUnixEpoch(2 * 86400);
+    try testing.expect(!dt_weekend.isWeekday());
+    try testing.expect(dt_weekend.isWeekend());
+}
+
+test "DateTime truncate and round" {
+    const testing = std.testing;
+
+    const dt_original = try DateTime.fromComponents(2023, 10, 27, 14, 35, 45, 0); // Friday, Oct 27, 2023 14:35:45 UTC
+
+    // Test truncate
+    const dt_trunc_year = try dt_original.truncate(time_units.TimeUnit.year);
+    const formatted_string_year = try dt_trunc_year.formatRfc3339(testing.allocator);
+    defer testing.allocator.free(formatted_string_year);
+    try testing.expectEqualStrings("2023-01-01T00:00:00Z", formatted_string_year);
+
+    const dt_trunc_month = try dt_original.truncate(time_units.TimeUnit.month);
+    const formatted_string_month = try dt_trunc_month.formatRfc3339(testing.allocator);
+    defer testing.allocator.free(formatted_string_month);
+    try testing.expectEqualStrings("2023-10-01T00:00:00Z", formatted_string_month);
+
+    const dt_trunc_day = try dt_original.truncate(time_units.TimeUnit.day);
+    const formatted_string_day = try dt_trunc_day.formatRfc3339(testing.allocator);
+    defer testing.allocator.free(formatted_string_day);
+    try testing.expectEqualStrings("2023-10-27T00:00:00Z", formatted_string_day);
+
+    const dt_trunc_hour = try dt_original.truncate(time_units.TimeUnit.hour);
+    const formatted_string_hour = try dt_trunc_hour.formatRfc3339(testing.allocator);
+    defer testing.allocator.free(formatted_string_hour);
+    try testing.expectEqualStrings("2023-10-27T14:00:00Z", formatted_string_hour);
+
+    const dt_trunc_minute = try dt_original.truncate(time_units.TimeUnit.minute);
+    const formatted_string_minute = try dt_trunc_minute.formatRfc3339(testing.allocator);
+    defer testing.allocator.free(formatted_string_minute);
+    try testing.expectEqualStrings("2023-10-27T14:35:00Z", formatted_string_minute);
+
+    const dt_trunc_second = try dt_original.truncate(time_units.TimeUnit.second);
+    const formatted_string_second = try dt_trunc_second.formatRfc3339(testing.allocator);
+    defer testing.allocator.free(formatted_string_second);
+    try testing.expectEqualStrings("2023-10-27T14:35:45Z", formatted_string_second);
+
+    // Test round
+    const dt_round_up_hour = try DateTime.fromComponents(2023, 10, 27, 14, 30, 0, 0); // Half hour, rounds up
+    var dt_round_hour = try dt_round_up_hour.round(time_units.TimeUnit.hour);
+    const formatted_string_round_hour_up = try dt_round_hour.formatRfc3339(testing.allocator);
+    defer testing.allocator.free(formatted_string_round_hour_up);
+    try testing.expectEqualStrings("2023-10-27T15:00:00Z", formatted_string_round_hour_up);
+
+    const dt_round_down_hour = try DateTime.fromComponents(2023, 10, 27, 14, 29, 59, 0); // Just under half hour, rounds down
+    dt_round_hour = try dt_round_down_hour.round(time_units.TimeUnit.hour);
+    const formatted_string_hour_down = try dt_round_hour.formatRfc3339(testing.allocator);
+    defer testing.allocator.free(formatted_string_hour_down);
+    try testing.expectEqualStrings("2023-10-27T14:00:00Z", formatted_string_hour_down);
+
+    const dt_round_up_day = try DateTime.fromComponents(2023, 10, 27, 12, 0, 0, 0); // Midday, rounds up
+    var dt_round_day = try dt_round_up_day.round(time_units.TimeUnit.day);
+    const formatted_string_day_up = try dt_round_day.formatRfc3339(testing.allocator);
+    defer testing.allocator.free(formatted_string_day_up);
+    try testing.expectEqualStrings("2023-10-28T00:00:00Z", formatted_string_day_up);
+
+    const dt_round_down_day = try DateTime.fromComponents(2023, 10, 27, 11, 59, 59, 0); // Just before midday, rounds down
+    dt_round_day = try dt_round_down_day.round(time_units.TimeUnit.day);
+    const formatted_string_day_down = try dt_round_day.formatRfc3339(testing.allocator);
+    defer testing.allocator.free(formatted_string_day_down);
+    try testing.expectEqualStrings("2023-10-27T00:00:00Z", formatted_string_day_down);
+}

@@ -90,3 +90,74 @@ pub const CivilDate = struct {
         return @as(i64, days);
     }
 };
+
+test "days_since_unix_epoch" {
+    const testing = std.testing;
+
+    // Test case 1: The Unix epoch itself
+    try testing.expectEqual(@as(i64, 0), CivilDate.days_since_unix_epoch(1970, 1, 1));
+
+    // Test case 2: A date after the epoch
+    try testing.expectEqual(@as(i64, 19657), CivilDate.days_since_unix_epoch(2023, 10, 27));
+
+    // Test case 3: A date before the epoch
+    try testing.expectEqual(@as(i64, -3518), CivilDate.days_since_unix_epoch(1960, 5, 15));
+
+    // Test case 4: A leap day (Feb 29, 2000)
+    try testing.expectEqual(@as(i64, 11016), CivilDate.days_since_unix_epoch(2000, 2, 29));
+
+    // Test case 5: Day after a leap day
+    try testing.expectEqual(@as(i64, 11017), CivilDate.days_since_unix_epoch(2000, 3, 1));
+
+    // Test case 6: A non-leap year (1900)
+    try testing.expectEqual(@as(i64, -25508), CivilDate.days_since_unix_epoch(1900, 3, 1));
+    try testing.expectEqual(CivilDate.days_since_unix_epoch(1900, 3, 1), CivilDate.days_since_unix_epoch(1900, 2, 28) + 1);
+
+    // Test case 7: Another non-leap year (2100)
+    try testing.expectEqual(CivilDate.days_since_unix_epoch(2100, 3, 1), CivilDate.days_since_unix_epoch(2100, 2, 28) + 1);
+
+    // Test case 8: A regular leap year (2004)
+    try testing.expectEqual(CivilDate.days_since_unix_epoch(2004, 3, 1), CivilDate.days_since_unix_epoch(2004, 2, 29) + 1);
+}
+
+test "from_days" {
+    const testing = std.testing;
+
+    // Test case 1: The Unix epoch
+    var date = CivilDate.from_days(0);
+    try testing.expectEqual(1970, date.year);
+    try testing.expectEqual(1, date.month);
+    try testing.expectEqual(1, date.day);
+
+    // Test case 2: A date after the epoch
+    date = CivilDate.from_days(19657);
+    try testing.expectEqual(2023, date.year);
+    try testing.expectEqual(10, date.month);
+    try testing.expectEqual(27, date.day);
+
+    // Test case 3: A date before the epoch
+    date = CivilDate.from_days(-3518);
+    try testing.expectEqual(1960, date.year);
+    try testing.expectEqual(5, date.month);
+    try testing.expectEqual(15, date.day);
+
+    // Test case 4: A leap day (Feb 29, 2000)
+    date = CivilDate.from_days(11016);
+    try testing.expectEqual(2000, date.year);
+    try testing.expectEqual(2, date.month);
+    try testing.expectEqual(29, date.day);
+}
+
+test "roundtrip conversion" {
+    const testing = std.testing;
+    var i: i64 = -20000;
+    while (i < 20000) : (i += 1) {
+        const original_date = CivilDate.from_days(i);
+        const days = CivilDate.days_since_unix_epoch(original_date.year, original_date.month, original_date.day);
+        const final_date = CivilDate.from_days(days);
+        try testing.expectEqual(original_date.year, final_date.year);
+        try testing.expectEqual(original_date.month, final_date.month);
+        try testing.expectEqual(original_date.day, final_date.day);
+        try testing.expectEqual(i, days);
+    }
+}

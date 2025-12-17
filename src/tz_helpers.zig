@@ -29,3 +29,20 @@ pub fn transitionCompare(context: i64, item: std.tz.Transition) std.math.Order {
 }
 
 pub const NoTimetypeFound = error{};
+
+test "transitionCompare" {
+    const testing = std.testing;
+    const Transition = std.tz.Transition;
+    const Order = std.math.Order;
+
+    const transition1 = Transition{ .ts = 100, .timetype = undefined };
+    const transition2 = Transition{ .ts = 200, .timetype = undefined };
+
+    try testing.expectEqual(Order.lt, transitionCompare(50, transition1));
+    try testing.expectEqual(Order.eq, transitionCompare(100, transition1));
+    try testing.expectEqual(Order.gt, transitionCompare(150, transition1));
+
+    try testing.expectEqual(Order.lt, transitionCompare(150, transition2));
+    try testing.expectEqual(Order.eq, transitionCompare(200, transition2));
+    try testing.expectEqual(Order.gt, transitionCompare(250, transition2));
+}
