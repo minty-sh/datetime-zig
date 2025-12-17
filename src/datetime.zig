@@ -70,7 +70,7 @@ pub const DateTime = struct {
         if (mm_ < 0 or mm_ > 59) return DateError.InvalidTime;
         if (ss < 0 or ss > 60) return DateError.InvalidTime; // allow leap second (60)
 
-        const days = CivilDate.days_from_civil(y, m, d);
+        const days = CivilDate.days_since_unix_epoch(y, m, d);
         const seconds_in_day: i64 = @intCast(hh * 3600 + mm_ * 60 + ss);
         const local_secs: i64 = days * 86400 + seconds_in_day;
         // convert local -> utc by subtracting offset
@@ -155,7 +155,7 @@ pub const DateTime = struct {
         const min_i = @as(i32, minute);
         const sec_i = @as(i32, second);
 
-        const days = CivilDate.days_from_civil(y_i, m_i, d_i);
+        const days = CivilDate.days_since_unix_epoch(y_i, m_i, d_i);
         const local_secs: i64 = days * 86400 + @as(i64, h_i * 3600 + min_i * 60 + sec_i);
         const utc_secs: i64 = local_secs - @as(i64, offset_seconds);
 
@@ -395,8 +395,8 @@ pub const DateTime = struct {
     /// Returns the day of the year (1-366) for this DateTime.
     pub fn dayOfYear(self: DateTime) u16 {
         const cd = self.toCivilDate();
-        const first_day_of_year = CivilDate.days_from_civil(cd.year, 1, 1);
-        const this_day = CivilDate.days_from_civil(cd.year, cd.month, cd.day);
+        const first_day_of_year = CivilDate.days_since_unix_epoch(cd.year, 1, 1);
+        const this_day = CivilDate.days_since_unix_epoch(cd.year, cd.month, cd.day);
         return @intCast(this_day - first_day_of_year + 1);
     }
 
@@ -570,20 +570,29 @@ pub const DateTime = struct {
 
     /// Converts this DateTime to a different timezone specified by `tz_name`.
     pub fn toTimezone(self: DateTime, allocator: std.mem.Allocator, tz_name: []const u8) !DateTime {
-        // TODO: Linux-only
-        const tz_path = try std.fmt.allocPrint(allocator, "/usr/share/zoneinfo/{s}", .{tz_name});
-        defer allocator.free(tz_path);
+        const builtin = @import("builtin");
 
-        const file = try std.fs.cwd().openFile(tz_path, .{});
-        defer file.close();
+        switch (builtin.os.tag) {
+            .windows => {
+                @compileError("toTimezone is not implemented on Windows");
+            },
+            else => {
+                // Assume POSIX-like system with /usr/share/zoneinfo
+                const tz_path = try std.fmt.allocPrint(allocator, "/usr/share/zoneinfo/{s}", .{tz_name});
+                defer allocator.free(tz_path);
 
-        var buffer: [4096]u8 = undefined;
-        const bytes_read = try file.readAll(&buffer);
-        var stream = std.io.fixedBufferStream(buffer[0..bytes_read]);
-        var tz_data = try std.tz.Tz.parse(allocator, stream.reader());
-        defer tz_data.deinit();
+                const file = try std.fs.cwd().openFile(tz_path, .{});
+                defer file.close();
 
-        const timetype = try tz_helpers.findTimetype(&tz_data, self.unix_secs);
-        return DateTime.fromUnix(self.unix_secs, timetype.offset);
+                var buffer: [4096]u8 = undefined;
+                const bytes_read = try file.readAll(&buffer);
+                var stream = std.io.fixedBufferStream(buffer[0..bytes_read]);
+                var tz_data = try std.tz.Tz.parse(allocator, stream.reader());
+                defer tz_data.deinit();
+
+                const timetype = try tz_helpers.findTimetype(&tz_data, self.unix_secs);
+                return DateTime.fromUnix(self.unix_secs, timetype.offset);
+            },
+        }
     }
 };
