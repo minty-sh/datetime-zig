@@ -1,6 +1,6 @@
 const std = @import("std");
-const DateTime = @import("DateTime.zig");
-const CivilDate = @import("CivilDate.zig");
+pub const DateTime = @import("DateTime.zig");
+pub const CivilDate = @import("CivilDate.zig");
 
 pub const DayOfWeek = DateTime.time_units.DayOfWeek;
 pub const Duration = DateTime.Duration;
