@@ -1,13 +1,13 @@
 const std = @import("std");
-const datetime = @import("datetime.zig");
+const DateTime = @import("DateTime.zig");
+const CivilDate = @import("CivilDate.zig");
 
-pub const DateTime = datetime.DateTime;
-pub const DayOfWeek = datetime.time_units.DayOfWeek;
-pub const Duration = datetime.Duration;
+pub const DayOfWeek = DateTime.time_units.DayOfWeek;
+pub const Duration = DateTime.Duration;
 
 test "DateTime diff" {
-    const dt1 = DateTime.fromUnix(1000, 0);
-    const dt2 = DateTime.fromUnix(500, 0);
+    const dt1 = DateTime.Unix(1000, 0);
+    const dt2 = DateTime.Unix(500, 0);
     const d = dt1.diff(dt2);
     try std.testing.expectEqual(@as(i64, 500), d.seconds);
 
@@ -19,7 +19,7 @@ test "DateTime diff" {
 }
 
 test "Date Arithmetic" {
-    const dt1 = try DateTime.fromComponents(2023, 1, 31, 10, 0, 0, 0);
+    const dt1 = try DateTime.Components(2023, 1, 31, 10, 0, 0, 0);
 
     // add days
     const dt2 = dt1.addDays(1);
@@ -36,7 +36,7 @@ test "Date Arithmetic" {
     try std.testing.expectEqual(28, cd3.day);
 
     // add years, with leap day handling
-    const dt4 = try DateTime.fromComponents(2024, 2, 29, 12, 0, 0, 0);
+    const dt4 = try DateTime.Components(2024, 2, 29, 12, 0, 0, 0);
     const dt5 = try dt4.addYears(1);
     const cd5 = dt5.toCivilDate();
     try std.testing.expectEqual(2025, cd5.year);
@@ -52,12 +52,12 @@ test "Date Arithmetic" {
 
 test "DayOfWeek and Business Days" {
     // 1970-01-01 was a Thursday
-    const dt1 = DateTime.fromUnix(0, 0);
+    const dt1 = DateTime.Unix(0, 0);
     try std.testing.expectEqual(DayOfWeek.thursday, dt1.dayOfWeek());
     try std.testing.expect(dt1.isWeekday());
 
     // 2023-10-27 is a Friday
-    const dt2 = try DateTime.fromComponents(2023, 10, 27, 0, 0, 0, 0);
+    const dt2 = try DateTime.Components(2023, 10, 27, 0, 0, 0, 0);
     // Add 1 business day to Friday 27th -> Monday 30th
     const dt3 = dt2.addBusinessDays(1);
     const cd3 = dt3.toCivilDate();
@@ -69,26 +69,26 @@ test "DayOfWeek and Business Days" {
 
 test "ISO Week" {
     // 2023-10-27 is in week 43 of 2023
-    const dt1 = try DateTime.fromComponents(2023, 10, 27, 0, 0, 0, 0);
+    const dt1 = try DateTime.Components(2023, 10, 27, 0, 0, 0, 0);
     const iw1 = try dt1.isoWeek();
     try std.testing.expectEqual(2023, iw1.year);
     try std.testing.expectEqual(43, iw1.week);
 
     // 2021-01-01 is in week 53 of 2020
-    const dt2 = try DateTime.fromComponents(2021, 1, 1, 0, 0, 0, 0);
+    const dt2 = try DateTime.Components(2021, 1, 1, 0, 0, 0, 0);
     const iw2 = try dt2.isoWeek();
     try std.testing.expectEqual(2020, iw2.year);
     try std.testing.expectEqual(53, iw2.week);
 
     // 2010-01-03 was a Sunday, should be in week 53 of 2009
-    const dt3 = try DateTime.fromComponents(2010, 1, 3, 0, 0, 0, 0);
+    const dt3 = try DateTime.Components(2010, 1, 3, 0, 0, 0, 0);
     const iw3 = try dt3.isoWeek();
     try std.testing.expectEqual(2009, iw3.year);
     try std.testing.expectEqual(53, iw3.week);
 }
 
 test "Truncate and Round" {
-    const dt = try DateTime.fromComponents(2023, 10, 27, 10, 30, 45, 0);
+    const dt = try DateTime.Components(2023, 10, 27, 10, 30, 45, 0);
 
     // Truncate
     const trunc_day = try dt.truncate(.day);
@@ -114,26 +114,32 @@ test "Final Features" {
     const allocator = std.testing.allocator;
 
     // strftime
-    const dt1 = try DateTime.fromComponents(2023, 10, 27, 10, 30, 5, 0);
+    const dt1 = try DateTime.Components(2023, 10, 27, 10, 30, 5, 0);
     const s1 = try dt1.strftime(allocator, "%A, %B %d, %Y");
     defer allocator.free(s1);
     try std.testing.expectEqualStrings("Friday, October 27, 2023", s1);
 
     // humanize
-    const now = try DateTime.fromComponents(2023, 10, 27, 10, 0, 0, 0);
-    const five_min_ago = now.sub(Duration.fromSeconds(5 * 60));
-    const s2 = try five_min_ago.humanize(now, allocator);
+    const now = try DateTime.Components(2023, 10, 27, 10, 0, 0, 0);
+    const five_min_ago = now.sub(Duration.Seconds(5 * 60));
+    const s2 = try five_min_ago.toHumanString(now, allocator);
     defer allocator.free(s2);
     try std.testing.expectEqualStrings("5 minutes ago", s2);
 
     // IANA Timezone
-    const dt_utc = try DateTime.fromComponents(2023, 11, 5, 10, 0, 0, 0); // 10:00 UTC
-    const dt_ny = dt_utc.toTimezone(allocator, "America/New_York") catch |err| {
-        if (err == error.FileNotFound) return; // skip test if tzdata not found
-        return err;
-    };
-    try std.testing.expectEqual(-5 * 3600, dt_ny.offset_seconds);
-    const local_secs = dt_ny.unix_secs + dt_ny.offset_seconds;
-    const hour = @divFloor(@mod(local_secs, 86400), 3600);
-    try std.testing.expectEqual(5, hour); // 10:00 UTC is 05:00 EST
+    const dt_utc = try DateTime.Components(2023, 11, 5, 10, 0, 0, 0);
+    switch (@import("builtin").os.tag) {
+        // TODO: don't know if macOS has tzdata
+        .linux => {
+            const dt_ny = dt_utc.toTimezone(allocator, "America/New_York") catch |err| {
+                if (err == error.FileNotFound) return; // skip test if tzdata not found
+                return err;
+            };
+            try std.testing.expectEqual(-5 * 3600, dt_ny.offset_seconds);
+            const local_secs = dt_ny.unix_secs + dt_ny.offset_seconds;
+            const hour = @divFloor(@mod(local_secs, 86400), 3600);
+            try std.testing.expectEqual(5, hour);
+        },
+        else => return,
+    }
 }
