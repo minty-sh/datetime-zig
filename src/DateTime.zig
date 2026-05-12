@@ -30,7 +30,7 @@ unix_secs: i64,
 offset_seconds: i32,
 
 /// Create from unix seconds + offset
-pub fn Unix(unix_secs: i64, offset_seconds: i32) DateTime {
+pub fn fromUnix(unix_secs: i64, offset_seconds: i32) DateTime {
     return .{
         .unix_secs = unix_secs,
         .offset_seconds = offset_seconds,
@@ -38,7 +38,7 @@ pub fn Unix(unix_secs: i64, offset_seconds: i32) DateTime {
 }
 
 /// Create from unix seconds, assuming UTC (offset 0)
-pub fn Epoch(unix_secs: i64) DateTime {
+pub fn fromEpoch(unix_secs: i64) DateTime {
     return .{
         .unix_secs = unix_secs,
         .offset_seconds = 0,
@@ -47,7 +47,7 @@ pub fn Epoch(unix_secs: i64) DateTime {
 
 /// Create from numeric components (year, month, day, hour, minute, second).
 /// If month/day/time components are omitted (use null), defaults are month=1, day=1, hour=0, min=0, sec=0.
-pub fn Components(
+pub fn fromComponents(
     year: i32,
     month_opt: ?u8,
     day_opt: ?u8,
@@ -82,12 +82,12 @@ pub fn Components(
     // convert local -> utc by subtracting offset
     const offset_i64: i64 = @intCast(offset_seconds);
     const utc_secs = local_secs - offset_i64;
-    return Unix(utc_secs, offset_seconds);
+    return fromUnix(utc_secs, offset_seconds);
 }
 
 /// Parse an RFC3339 / ISO8601-like string
 /// Accepts: YYYY-MM-DDTHH:MM[:SS][.frac](Z|+HH:MM|-HH:MM)
-pub fn Rfc3339(s: []const u8) !DateTime {
+pub fn fromRfc3339(s: []const u8) !DateTime {
     var i: usize = 0;
     const len = s.len;
 
@@ -103,7 +103,7 @@ pub fn Rfc3339(s: []const u8) !DateTime {
 
     // If date-only (no time) -> midnight UTC (permissive choice)
     if (!parse.expect(s, i, 'T') and !parse.expect(s, i, 't') and !parse.expect(s, i, ' ')) {
-        const dt = try Components(@intCast(year), @intCast(month), @intCast(day), null, null, null, 0);
+        const dt = try fromComponents(@intCast(year), @intCast(month), @intCast(day), null, null, null, 0);
         return dt;
     }
     // skip separator
@@ -163,7 +163,7 @@ pub fn Rfc3339(s: []const u8) !DateTime {
     const local_secs: i64 = days * 86400 + @as(i64, h_i * 3600 + min_i * 60 + sec_i);
     const utc_secs: i64 = local_secs - @as(i64, offset_seconds);
 
-    return Unix(utc_secs, offset_seconds);
+    return fromUnix(utc_secs, offset_seconds);
 }
 
 /// Format this DateTime into RFC3339 string using its offset.
@@ -180,7 +180,7 @@ pub fn formatRfc3339(self: @This(), allocator: std.mem.Allocator) ![]u8 {
     const minute: u8 = @intCast(@divFloor(rem, 60));
     const second: u8 = @intCast(@mod(rem, 60));
 
-    const result = CivilDate.Days(days);
+    const result = CivilDate.fromDays(days);
     const y = result.year;
     const m = result.month;
     const d = result.day;
@@ -230,7 +230,7 @@ pub fn formatRfc3339(self: @This(), allocator: std.mem.Allocator) ![]u8 {
     idx += 1;
     parse.write2digits(out, &idx, second);
     // tz
-    std.mem.copyForwards(u8, out[idx..], tz_slice);
+    @memcpy(out[idx..][0..tz_slice.len], tz_slice);
     return out;
 }
 
@@ -238,7 +238,7 @@ pub fn formatRfc3339(self: @This(), allocator: std.mem.Allocator) ![]u8 {
 pub fn formatDate(self: @This(), allocator: std.mem.Allocator) ![]u8 {
     const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
     const days = @divFloor(local_secs, 86400);
-    const result = CivilDate.Days(days);
+    const result = CivilDate.fromDays(days);
     const y = result.year;
     const m = result.month;
     const d = result.day;
@@ -260,42 +260,42 @@ pub fn formatDate(self: @This(), allocator: std.mem.Allocator) ![]u8 {
 pub fn toCivilDate(self: @This()) CivilDate {
     const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
     const days = @divFloor(local_secs, 86400);
-    return CivilDate.Days(days);
+    return CivilDate.fromDays(days);
 }
 
 /// Calculates the duration between two DateTime instances.
 pub fn diff(self: @This(), other: @This()) Duration {
-    return Duration.Seconds(self.unix_secs - other.unix_secs);
+    return Duration.fromSeconds(self.unix_secs - other.unix_secs);
 }
 
 /// Adds a duration to this DateTime instance, returning a new DateTime.
 pub fn add(self: @This(), d: Duration) DateTime {
-    return Unix(self.unix_secs + d.seconds, self.offset_seconds);
+    return fromUnix(self.unix_secs + d.seconds, self.offset_seconds);
 }
 
 /// Subtracts a duration from this DateTime instance, returning a new DateTime.
 pub fn sub(self: @This(), d: Duration) DateTime {
-    return Unix(self.unix_secs - d.seconds, self.offset_seconds);
+    return fromUnix(self.unix_secs - d.seconds, self.offset_seconds);
 }
 
 /// Adds a specified number of days to the DateTime.
 pub fn addDays(self: @This(), days: i64) DateTime {
-    return self.add(Duration.Seconds(days * 86400));
+    return self.add(Duration.fromSeconds(days * 86400));
 }
 
 /// Subtracts a specified number of days from the DateTime.
 pub fn subDays(self: @This(), days: i64) DateTime {
-    return self.sub(Duration.Seconds(days * 86400));
+    return self.sub(Duration.fromSeconds(days * 86400));
 }
 
 /// Adds a specified number of weeks to the DateTime.
 pub fn addWeeks(self: @This(), weeks: i64) DateTime {
-    return self.add(Duration.Seconds(weeks * 7 * 86400));
+    return self.add(Duration.fromSeconds(weeks * 7 * 86400));
 }
 
 /// Subtracts a specified number of weeks from the DateTime.
 pub fn subWeeks(self: @This(), weeks: i64) DateTime {
-    return self.sub(Duration.Seconds(weeks * 7 * 86400));
+    return self.sub(Duration.fromSeconds(weeks * 7 * 86400));
 }
 
 /// Adds a specified number of months to the DateTime. Handles day clamping.
@@ -319,7 +319,7 @@ pub fn addMonths(self: @This(), months: i64) !DateTime {
     const minute: u8 = @intCast(@divFloor(rem, 60));
     const second: u8 = @intCast(@mod(rem, 60));
 
-    return Components(@intCast(new_year), new_month, @intCast(new_day), hour, minute, second, self.offset_seconds);
+    return fromComponents(@intCast(new_year), new_month, @intCast(new_day), hour, minute, second, self.offset_seconds);
 }
 
 /// Subtracts a specified number of months from the DateTime.
@@ -345,7 +345,7 @@ pub fn addYears(self: @This(), years: i64) !DateTime {
     const minute: u8 = @intCast(@divFloor(rem, 60));
     const second: u8 = @intCast(@mod(rem, 60));
 
-    return Components(@intCast(new_year), @intCast(cd.month), @intCast(new_day), hour, minute, second, self.offset_seconds);
+    return fromComponents(@intCast(new_year), @intCast(cd.month), @intCast(new_day), hour, minute, second, self.offset_seconds);
 }
 
 /// Subtracts a specified number of years from the DateTime.
@@ -408,7 +408,7 @@ pub fn isoWeek(self: @This()) !struct { year: i32, week: u8 } {
     const th_cd = thursday.toCivilDate();
     const iso_year = th_cd.year;
 
-    const first_day_of_iso_year = try Components(iso_year, 1, 4, 0, 0, 0, 0);
+    const first_day_of_iso_year = try fromComponents(iso_year, 1, 4, 0, 0, 0, 0);
     const first_thursday_dow = first_day_of_iso_year.dayOfWeek();
     const first_thursday_iso_dow = if (first_thursday_dow == .sunday) 7 else @intFromEnum(first_thursday_dow);
 
@@ -434,12 +434,12 @@ pub fn truncate(self: @This(), unit: time_units.TimeUnit) !DateTime {
     const second: u8 = @intCast(@mod(rem, 60));
 
     return switch (unit) {
-        .year => Components(cd.year, 1, 1, 0, 0, 0, self.offset_seconds),
-        .month => Components(cd.year, @intCast(cd.month), 1, 0, 0, 0, self.offset_seconds),
-        .day => Components(cd.year, @intCast(cd.month), @intCast(cd.day), 0, 0, 0, self.offset_seconds),
-        .hour => Components(cd.year, @intCast(cd.month), @intCast(cd.day), hour, 0, 0, self.offset_seconds),
-        .minute => Components(cd.year, @intCast(cd.month), @intCast(cd.day), hour, minute, 0, self.offset_seconds),
-        .second => Components(cd.year, @intCast(cd.month), @intCast(cd.day), hour, minute, second, self.offset_seconds),
+        .year => fromComponents(cd.year, 1, 1, 0, 0, 0, self.offset_seconds),
+        .month => fromComponents(cd.year, @intCast(cd.month), 1, 0, 0, 0, self.offset_seconds),
+        .day => fromComponents(cd.year, @intCast(cd.month), @intCast(cd.day), 0, 0, 0, self.offset_seconds),
+        .hour => fromComponents(cd.year, @intCast(cd.month), @intCast(cd.day), hour, 0, 0, self.offset_seconds),
+        .minute => fromComponents(cd.year, @intCast(cd.month), @intCast(cd.day), hour, minute, 0, self.offset_seconds),
+        .second => fromComponents(cd.year, @intCast(cd.month), @intCast(cd.day), hour, minute, second, self.offset_seconds),
     };
 }
 
@@ -476,13 +476,13 @@ pub fn round(self: @This(), unit: time_units.TimeUnit) !DateTime {
         },
         .hour => {
             if (minute >= 30) {
-                return self.add(Duration.Seconds(3600)).truncate(.hour);
+                return self.add(Duration.fromSeconds(3600)).truncate(.hour);
             }
             return self.truncate(.hour);
         },
         .minute => {
             if (second >= 30) {
-                return self.add(Duration.Seconds(60)).truncate(.minute);
+                return self.add(Duration.fromSeconds(60)).truncate(.minute);
             }
             return self.truncate(.minute);
         },
@@ -494,9 +494,9 @@ pub fn round(self: @This(), unit: time_units.TimeUnit) !DateTime {
 
 /// Formats according to format specifiers (%Y, %m, %d, %H, %M, %S, %B, %b, %A, %a).
 pub fn strftime(self: @This(), allocator: std.mem.Allocator, fmt_str: []const u8) ![]u8 {
-    var result: std.ArrayList(u8) = .empty;
-    // Do not deinit here because we return allocated owned slice via toOwnedSlice.
-    const writer = result.writer(allocator);
+    var aw: std.Io.Writer.Allocating = .init(allocator);
+    errdefer aw.deinit();
+    const writer = &aw.writer;
 
     const cd = self.toCivilDate();
     const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
@@ -520,19 +520,19 @@ pub fn strftime(self: @This(), allocator: std.mem.Allocator, fmt_str: []const u8
             switch (fmt_str[i]) {
                 'Y' => {
                     const year: u32 = @intCast(cd.year);
-                    try std.fmt.format(writer, "{d:04}", .{year});
+                    try writer.print("{d:04}", .{year});
                 },
                 'm' => {
                     const month: u32 = @intCast(cd.month);
-                    try std.fmt.format(writer, "{d:02}", .{month});
+                    try writer.print("{d:02}", .{month});
                 },
                 'd' => {
                     const day: u32 = @intCast(cd.day);
-                    try std.fmt.format(writer, "{d:02}", .{day});
+                    try writer.print("{d:02}", .{day});
                 },
-                'H' => try std.fmt.format(writer, "{d:02}", .{hour}),
-                'M' => try std.fmt.format(writer, "{d:02}", .{minute}),
-                'S' => try std.fmt.format(writer, "{d:02}", .{second}),
+                'H' => try writer.print("{d:02}", .{hour}),
+                'M' => try writer.print("{d:02}", .{minute}),
+                'S' => try writer.print("{d:02}", .{second}),
                 'B' => try writer.writeAll(constants.month_names[@intCast(cd.month - 1)]),
                 'b' => try writer.writeAll(constants.month_abbrs[@intCast(cd.month - 1)]),
                 'A' => try writer.writeAll(constants.day_names[@intFromEnum(self.dayOfWeek())]),
@@ -548,7 +548,7 @@ pub fn strftime(self: @This(), allocator: std.mem.Allocator, fmt_str: []const u8
         }
         i += 1;
     }
-    return result.toOwnedSlice(allocator);
+    return aw.toOwnedSlice();
 }
 
 /// Humanize (relative time) using humanize module.
@@ -564,7 +564,8 @@ pub fn toHumanString(self: @This(), now: @This(), allocator: std.mem.Allocator) 
 
 /// Converts this DateTime to a different timezone specified by `tz_name`.
 /// Returns a DateTime with the same instant (unix_secs) and the timezone's offset at that instant.
-pub fn toTimezone(self: @This(), allocator: std.mem.Allocator, tz_name: []const u8) !DateTime {
+/// `io` is required for file system access; obtain one from a `std.Io.Threaded` instance.
+pub fn toTimezone(self: @This(), io: std.Io, allocator: std.mem.Allocator, tz_name: []const u8) !DateTime {
     const builtin = @import("builtin");
 
     if (builtin.os.tag == .windows) {
@@ -574,15 +575,17 @@ pub fn toTimezone(self: @This(), allocator: std.mem.Allocator, tz_name: []const 
         const tz_path = try std.fmt.allocPrint(allocator, "/usr/share/zoneinfo/{s}", .{tz_name});
         defer allocator.free(tz_path);
 
-        const file_contents = try std.fs.cwd().readFileAlloc(allocator, tz_path, std.math.maxInt(usize));
+        const file_contents = std.Io.Dir.cwd().readFileAlloc(io, tz_path, allocator, .unlimited) catch |err| {
+            if (err == error.FileNotFound) return Error.NoTimetypeFound;
+            return err;
+        };
         defer allocator.free(file_contents);
 
-        var my_fbs = std.io.fixedBufferStream(file_contents);
-        const stream = my_fbs.reader();
-        var tz_data = try std.tz.Tz.parse(allocator, stream);
+        var reader = std.Io.Reader.fixed(file_contents);
+        var tz_data = try std.tz.Tz.parse(allocator, &reader);
         defer tz_data.deinit();
 
         const timetype = try tz_helpers.findTimetype(&tz_data, self.unix_secs);
-        return Unix(self.unix_secs, timetype.offset);
+        return fromUnix(self.unix_secs, timetype.offset);
     }
 }

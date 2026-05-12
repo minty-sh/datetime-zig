@@ -20,13 +20,12 @@ A lightweight and thoroughly tested datetime library written in Zig, whose depen
 ```zig
 const std = @import("std");
 const datetime = @import("datetime");
-const DateTime = datetime.DateTime;
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    var now_unix_secs = std.time.timestamp();
-    var now_utc = DateTime.Epoch(now_unix_secs);
+    const now_unix_secs = std.time.timestamp();
+    const now_utc = datetime.DateTime.fromEpoch(now_unix_secs);
     const now_utc_str = try now_utc.strftime(allocator, "%Y-%m-%d %H:%M:%S");
     defer allocator.free(now_utc_str);
     std.debug.print("Current UTC Datetime: {s}\n", .{now_utc_str});
@@ -37,12 +36,11 @@ pub fn main() !void {
 
 ```zig
 const std = @import("std");
-const CivilDate = @import("datetime").CivilDate;
+const datetime = @import("datetime");
 
 pub fn main() !void {
-    const allocator = std.heap.page_allocator;
     // Create a specific civil date
-    var civil_date = CivilDate{ .year = 2023, .month = 10, .day = 27 };
+    const civil_date = datetime.CivilDate{ .year = 2023, .month = 10, .day = 27 };
     std.debug.print("Civil Date: {d}-{d}-{d}\n", .{civil_date.year, civil_date.month, civil_date.day});
 }
 ```
@@ -51,13 +49,18 @@ pub fn main() !void {
 
 ```zig
 const std = @import("std");
-const Duration = @import("datetime").Duration;
+const datetime = @import("datetime");
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    var duration = Duration.Seconds(3600); // 1 hour
-    var future_datetime = now_utc.add(duration);
+    // Get the current UTC datetime
+    const now_unix_secs = std.time.timestamp();
+    const now_utc = datetime.DateTime.fromEpoch(now_unix_secs);
+
+    // Add a duration
+    const duration = datetime.Duration.fromSeconds(3600); // 1 hour
+    const future_datetime = now_utc.add(duration);
     const future_datetime_str = try future_datetime.strftime(allocator, "%Y-%m-%d %H:%M:%S");
     defer allocator.free(future_datetime_str);
     std.debug.print("Datetime in 1 hour: {s}\n", .{future_datetime_str});
@@ -104,6 +107,18 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&b.addRunArtifact(exe).step);
 }
+```
+
+### In `build.zig`
+
+In your `build.zig`, add the following to your `build` function:
+
+```zig
+    const datetime_dep = b.dependency("datetime-zig", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.addModule("datetime", datetime_dep.module("datetime"));
 ```
 
 ## License

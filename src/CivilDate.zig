@@ -12,7 +12,7 @@ day: i32,
 
 /// Creates a CivilDate from a count of days since the Unix epoch (1970-01-01).
 /// This function performs the inverse operation of `daysSinceUnixEpoch`.
-pub fn Days(days: i64) CivilDate {
+pub fn fromDays(days: i64) CivilDate {
     // Shift the day count so that calculations work with the Gregorian calendar starting at a reference point
     const shifted_days = @as(i64, days) + 719468;
 
@@ -125,25 +125,25 @@ test "Days" {
     const testing = std.testing;
 
     // Test case 1: The Unix epoch
-    var date = CivilDate.Days(0);
+    var date = CivilDate.fromDays(0);
     try testing.expectEqual(1970, date.year);
     try testing.expectEqual(1, date.month);
     try testing.expectEqual(1, date.day);
 
     // Test case 2: A date after the epoch
-    date = CivilDate.Days(19657);
+    date = CivilDate.fromDays(19657);
     try testing.expectEqual(2023, date.year);
     try testing.expectEqual(10, date.month);
     try testing.expectEqual(27, date.day);
 
     // Test case 3: A date before the epoch
-    date = CivilDate.Days(-3518);
+    date = CivilDate.fromDays(-3518);
     try testing.expectEqual(1960, date.year);
     try testing.expectEqual(5, date.month);
     try testing.expectEqual(15, date.day);
 
     // Test case 4: A leap day (Feb 29, 2000)
-    date = CivilDate.Days(11016);
+    date = CivilDate.fromDays(11016);
     try testing.expectEqual(2000, date.year);
     try testing.expectEqual(2, date.month);
     try testing.expectEqual(29, date.day);
@@ -153,9 +153,9 @@ test "roundtrip conversion" {
     const testing = std.testing;
     var i: i64 = -20000;
     while (i < 20000) : (i += 1) {
-        const original_date = CivilDate.Days(i);
+        const original_date = CivilDate.fromDays(i);
         const days = CivilDate.daysSinceUnixEpoch(original_date.year, original_date.month, original_date.day);
-        const final_date = CivilDate.Days(days);
+        const final_date = CivilDate.fromDays(days);
         try testing.expectEqual(original_date.year, final_date.year);
         try testing.expectEqual(original_date.month, final_date.month);
         try testing.expectEqual(original_date.day, final_date.day);

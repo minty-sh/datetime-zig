@@ -1,7 +1,6 @@
 const std = @import("std");
 const DateTime = @import("DateTime.zig");
 
-
 pub fn findTimetype(tz: *const std.tz.Tz, unix_secs: i64) !*const std.tz.Timetype {
     if (tz.transitions.len == 0) {
         if (tz.timetypes.len > 0) return &tz.timetypes[0];
@@ -28,8 +27,6 @@ pub fn findTimetype(tz: *const std.tz.Tz, unix_secs: i64) !*const std.tz.Timetyp
 pub fn transitionCompare(context: i64, item: std.tz.Transition) std.math.Order {
     return std.math.order(context, item.ts);
 }
-
-
 
 test "transitionCompare" {
     const testing = std.testing;
