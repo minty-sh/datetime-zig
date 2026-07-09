@@ -9,7 +9,7 @@ pub const Duration = @import("duration.zig").Duration;
 
 pub const CivilDate = @import("CivilDate.zig");
 
-pub const parse = @import("format_parse_helpers.zig");
+const parse = @import("format_parse_helpers.zig");
 
 pub const Error = error{
     BadFormat,
@@ -18,6 +18,12 @@ pub const Error = error{
     InvalidTime,
     InvalidOffset,
     NoTimetypeFound,
+};
+
+/// An ISO 8601 week date: the ISO week-numbering year and the week number (1-53).
+pub const IsoWeek = struct {
+    year: i32,
+    week: u8,
 };
 
 /// Represents a specific point in time, with a Unix timestamp and an offset from UTC.
@@ -43,6 +49,11 @@ pub fn fromEpoch(unix_secs: i64) DateTime {
         .unix_secs = unix_secs,
         .offset_seconds = 0,
     };
+}
+
+/// Returns the current UTC instant (Unix epoch seconds).
+pub fn now(io: std.Io) DateTime {
+    return fromEpoch(std.Io.Timestamp.now(io, .real).toSeconds());
 }
 
 /// Create from numeric components (year, month, day, hour, minute, second).
@@ -83,6 +94,11 @@ pub fn fromComponents(
     const offset_i64: i64 = @intCast(offset_seconds);
     const utc_secs = local_secs - offset_i64;
     return fromUnix(utc_secs, offset_seconds);
+}
+
+/// Creates a DateTime from a CivilDate plus time-of-day components and an offset.
+pub fn fromCivilDate(cd: CivilDate, hour: u8, minute: u8, second: u8, offset_seconds: i32) !DateTime {
+    return fromComponents(cd.year, @intCast(cd.month), @intCast(cd.day), hour, minute, second, offset_seconds);
 }
 
 /// Parse an RFC3339 / ISO8601-like string
@@ -170,20 +186,13 @@ pub fn fromRfc3339(s: []const u8) !DateTime {
 /// Allocates the returned string using given allocator.
 pub fn formatRfc3339(self: @This(), allocator: std.mem.Allocator) ![]u8 {
     // convert utc seconds -> local seconds by adding offset
-    const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
-    const days = @divFloor(local_secs, 86400);
-    var rem = local_secs - days * 86400;
-    if (rem < 0) rem += 86400;
-
-    const hour: u8 = @intCast(@divFloor(rem, 3600));
-    rem = rem - @as(i64, hour) * 3600;
-    const minute: u8 = @intCast(@divFloor(rem, 60));
-    const second: u8 = @intCast(@mod(rem, 60));
-
-    const result = CivilDate.fromDays(days);
-    const y = result.year;
-    const m = result.month;
-    const d = result.day;
+    const lc = self.local();
+    const y = lc.date.year;
+    const m = lc.date.month;
+    const d = lc.date.day;
+    const hour = lc.hour;
+    const minute = lc.minute;
+    const second = lc.second;
 
     // compose timezone suffix
     var tz_buf: [6]u8 = undefined; // "Z" or "+HH:MM"
@@ -234,7 +243,41 @@ pub fn formatRfc3339(self: @This(), allocator: std.mem.Allocator) ![]u8 {
     return out;
 }
 
-/// Return "YYYY-MM-DD" by allocating a small string
+/// Formats this DateTime as an HTTP-date (IMF-fixdate, RFC 7231), e.g.
+/// `"Fri, 27 Oct 2023 10:30:00 GMT"`. The timezone is always rendered as GMT
+/// (the instant is interpreted in UTC regardless of `offset_seconds`).
+/// Allocates the returned string using the given allocator.
+pub fn formatHttp(self: @This(), allocator: std.mem.Allocator) ![]u8 {
+    const lc = self.utc().local();
+    const cd = lc.date;
+    const hour = lc.hour;
+    const minute = lc.minute;
+    const second = lc.second;
+
+    const day_u: u32 = @intCast(cd.day);
+    const year_u: u32 = @intCast(cd.year);
+
+    var aw: std.Io.Writer.Allocating = .init(allocator);
+    errdefer aw.deinit();
+    const writer = &aw.writer;
+    try writer.print("{s}, {d:02} {s} {d:04} {d:02}:{d:02}:{d:02} GMT", .{
+        constants.day_abbrs[@intFromEnum(fromUnix(self.unix_secs, 0).dayOfWeek())],
+        day_u,
+        constants.month_abbrs[@intCast(cd.month - 1)],
+        year_u,
+        hour,
+        minute,
+        second,
+    });
+    return aw.toOwnedSlice();
+}
+
+/// Formats this DateTime as an ISO 8601 / RFC 3339 string. This is identical in
+/// output to `formatRfc3339` (date, time, and offset), and round-trips back
+/// through `fromRfc3339`.
+pub fn formatISO8601(self: @This(), allocator: std.mem.Allocator) ![]u8 {
+    return self.formatRfc3339(allocator);
+}
 pub fn formatDate(self: @This(), allocator: std.mem.Allocator) ![]u8 {
     const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
     const days = @divFloor(local_secs, 86400);
@@ -263,19 +306,74 @@ pub fn toCivilDate(self: @This()) CivilDate {
     return CivilDate.fromDays(days);
 }
 
+/// Splits this instant into its local civil date and wall-clock time-of-day,
+/// applying `offset_seconds`. Centralizes the h/m/s math duplicated across the
+/// formatting and arithmetic helpers.
+fn local(self: @This()) struct {
+    date: CivilDate,
+    hour: u8,
+    minute: u8,
+    second: u8,
+} {
+    const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
+    const days = @divFloor(local_secs, 86400);
+    var rem = local_secs - days * 86400;
+    if (rem < 0) rem += 86400;
+    const hour: u8 = @intCast(@divFloor(rem, 3600));
+    rem -= @as(i64, hour) * 3600;
+    const minute: u8 = @intCast(@divFloor(rem, 60));
+    const second: u8 = @intCast(@mod(rem, 60));
+    return .{ .date = CivilDate.fromDays(days), .hour = hour, .minute = minute, .second = second };
+}
+
+/// Returns a copy of this DateTime with the offset set to UTC (0).
+pub fn utc(self: @This()) DateTime {
+    return fromUnix(self.unix_secs, 0);
+}
+
+/// Returns the Unix timestamp (seconds since 1970-01-01T00:00:00Z) of this instant.
+pub fn toUnix(self: @This()) i64 {
+    return self.unix_secs;
+}
+
 /// Calculates the duration between two DateTime instances.
 pub fn diff(self: @This(), other: @This()) Duration {
     return Duration.fromSeconds(self.unix_secs - other.unix_secs);
 }
 
+/// Returns true if the two DateTimes represent the same instant (ignoring offset).
+pub fn eql(self: @This(), other: @This()) bool {
+    return self.unix_secs == other.unix_secs;
+}
+
+/// Returns the relative ordering of two instants (ignoring offset).
+pub fn order(self: @This(), other: @This()) std.math.Order {
+    return std.math.order(self.unix_secs, other.unix_secs);
+}
+
+/// Returns true if this instant is before `other`.
+pub fn isBefore(self: @This(), other: @This()) bool {
+    return self.unix_secs < other.unix_secs;
+}
+
+/// Returns true if this instant is after `other`.
+pub fn isAfter(self: @This(), other: @This()) bool {
+    return self.unix_secs > other.unix_secs;
+}
+
+/// Alias for `order`, for naming consistency with std comparison conventions.
+pub fn compare(self: @This(), other: @This()) std.math.Order {
+    return self.order(other);
+}
+
 /// Adds a duration to this DateTime instance, returning a new DateTime.
 pub fn add(self: @This(), d: Duration) DateTime {
-    return fromUnix(self.unix_secs + d.seconds, self.offset_seconds);
+    return fromUnix(self.unix_secs + d.asSeconds(), self.offset_seconds);
 }
 
 /// Subtracts a duration from this DateTime instance, returning a new DateTime.
 pub fn sub(self: @This(), d: Duration) DateTime {
-    return fromUnix(self.unix_secs - d.seconds, self.offset_seconds);
+    return fromUnix(self.unix_secs - d.asSeconds(), self.offset_seconds);
 }
 
 /// Adds a specified number of days to the DateTime.
@@ -311,13 +409,10 @@ pub fn addMonths(self: @This(), months: i64) !DateTime {
         new_day = days_in_new_month;
     }
 
-    const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
-    var rem = local_secs - @divFloor(local_secs, 86400) * 86400;
-    if (rem < 0) rem += 86400;
-    const hour: u8 = @intCast(@divFloor(rem, 3600));
-    rem = rem - @as(i64, hour) * 3600;
-    const minute: u8 = @intCast(@divFloor(rem, 60));
-    const second: u8 = @intCast(@mod(rem, 60));
+    const lc = self.local();
+    const hour = lc.hour;
+    const minute = lc.minute;
+    const second = lc.second;
 
     return fromComponents(@intCast(new_year), new_month, @intCast(new_day), hour, minute, second, self.offset_seconds);
 }
@@ -337,13 +432,10 @@ pub fn addYears(self: @This(), years: i64) !DateTime {
         new_day = 28;
     }
 
-    const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
-    var rem = local_secs - @divFloor(local_secs, 86400) * 86400;
-    if (rem < 0) rem += 86400;
-    const hour: u8 = @intCast(@divFloor(rem, 3600));
-    rem = rem - @as(i64, hour) * 3600;
-    const minute: u8 = @intCast(@divFloor(rem, 60));
-    const second: u8 = @intCast(@mod(rem, 60));
+    const lc = self.local();
+    const hour = lc.hour;
+    const minute = lc.minute;
+    const second = lc.second;
 
     return fromComponents(@intCast(new_year), @intCast(cd.month), @intCast(new_day), hour, minute, second, self.offset_seconds);
 }
@@ -399,7 +491,7 @@ pub fn dayOfYear(self: @This()) u16 {
 }
 
 /// Returns the ISO week date (year and week number).
-pub fn isoWeek(self: @This()) !struct { year: i32, week: u8 } {
+pub fn isoWeek(self: @This()) !IsoWeek {
     const dow = self.dayOfWeek();
     const iso_dow = if (dow == .sunday) 7 else @intFromEnum(dow);
 
@@ -425,13 +517,10 @@ pub fn isoWeek(self: @This()) !struct { year: i32, week: u8 } {
 /// Truncate to beginning of unit.
 pub fn truncate(self: @This(), unit: time_units.TimeUnit) !DateTime {
     const cd = self.toCivilDate();
-    const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
-    var rem = local_secs - @divFloor(local_secs, 86400) * 86400;
-    if (rem < 0) rem += 86400;
-    const hour: u8 = @intCast(@divFloor(rem, 3600));
-    rem = rem - @as(i64, hour) * 3600;
-    const minute: u8 = @intCast(@divFloor(rem, 60));
-    const second: u8 = @intCast(@mod(rem, 60));
+    const lc = self.local();
+    const hour = lc.hour;
+    const minute = lc.minute;
+    const second = lc.second;
 
     return switch (unit) {
         .year => fromComponents(cd.year, 1, 1, 0, 0, 0, self.offset_seconds),
@@ -446,13 +535,10 @@ pub fn truncate(self: @This(), unit: time_units.TimeUnit) !DateTime {
 /// Round to nearest unit (half-up).
 pub fn round(self: @This(), unit: time_units.TimeUnit) !DateTime {
     const cd = self.toCivilDate();
-    const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
-    var rem = local_secs - @divFloor(local_secs, 86400) * 86400;
-    if (rem < 0) rem += 86400;
-    const hour: u8 = @intCast(@divFloor(rem, 3600));
-    rem = rem - @as(i64, hour) * 3600;
-    const minute: u8 = @intCast(@divFloor(rem, 60));
-    const second: u8 = @intCast(@mod(rem, 60));
+    const lc = self.local();
+    const hour = lc.hour;
+    const minute = lc.minute;
+    const second = lc.second;
 
     switch (unit) {
         .year => {
@@ -498,16 +584,11 @@ pub fn strftime(self: @This(), allocator: std.mem.Allocator, fmt_str: []const u8
     errdefer aw.deinit();
     const writer = &aw.writer;
 
-    const cd = self.toCivilDate();
-    const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
-
-    var rem = local_secs - @divFloor(local_secs, 86400) * 86400;
-    if (rem < 0) rem += 86400;
-
-    const hour: u8 = @intCast(@divFloor(rem, 3600));
-    rem = rem - @as(i64, hour) * 3600;
-    const minute: u8 = @intCast(@divFloor(rem, 60));
-    const second: u8 = @intCast(@mod(rem, 60));
+    const lc = self.local();
+    const cd = lc.date;
+    const hour = lc.hour;
+    const minute = lc.minute;
+    const second = lc.second;
 
     var i: usize = 0;
     while (i < fmt_str.len) {
@@ -552,8 +633,8 @@ pub fn strftime(self: @This(), allocator: std.mem.Allocator, fmt_str: []const u8
 }
 
 /// Humanize (relative time) using humanize module.
-pub fn toHumanString(self: @This(), now: @This(), allocator: std.mem.Allocator) ![]u8 {
-    const diff_secs = self.unix_secs - now.unix_secs;
+pub fn toHumanString(self: @This(), reference: @This(), allocator: std.mem.Allocator) ![]u8 {
+    const diff_secs = self.unix_secs - reference.unix_secs;
 
     if (diff_secs >= 0) {
         return humanize.humanizeFuture(diff_secs, allocator);
@@ -562,9 +643,9 @@ pub fn toHumanString(self: @This(), now: @This(), allocator: std.mem.Allocator) 
     }
 }
 
-/// Converts this DateTime to a different timezone specified by `tz_name`.
-/// Returns a DateTime with the same instant (unix_secs) and the timezone's offset at that instant.
-/// `io` is required for file system access; obtain one from a `std.Io.Threaded` instance.
+/// Converts this DateTime to a different timezone specified by `tz_name`, returning a
+/// DateTime with the same instant (`unix_secs`) and the timezone's offset at that instant.
+/// `io` is the I/O context used to read the IANA tz database at `/usr/share/zoneinfo/{tz_name}`.
 pub fn toTimezone(self: @This(), io: std.Io, allocator: std.mem.Allocator, tz_name: []const u8) !DateTime {
     const builtin = @import("builtin");
 

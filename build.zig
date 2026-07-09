@@ -30,4 +30,8 @@ pub fn build(b: *std.Build) void {
 
     const docs_step = b.step("docs", "Generate documentation");
     docs_step.dependOn(&install_docs.step);
+
+    const fmt_run = b.addSystemCommand(&.{ "zig", "fmt", "--check", "src" });
+    const fmt_step = b.step("fmt", "Check formatting");
+    fmt_step.dependOn(&fmt_run.step);
 }

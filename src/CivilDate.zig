@@ -1,5 +1,8 @@
 const std = @import("std");
 const epoch = std.time.epoch;
+const constants = @import("constants.zig");
+const DayOfWeek = @import("time_units.zig").DayOfWeek;
+const test_helpers = @import("test_helpers.zig");
 
 /// Represents a civil date (year, month, day) without time components or timezone information.
 /// This file is the struct type, which is primarily used for date calculations and conversions.
@@ -57,6 +60,116 @@ pub fn fromDays(days: i64) CivilDate {
 
     // Return the resulting CivilDate struct
     return .{ .year = year_result, .month = month, .day = day };
+}
+
+/// Creates a CivilDate from its year, month, and day components.
+pub fn fromComponents(year: i32, month: i32, day: i32) CivilDate {
+    return .{ .year = year, .month = month, .day = day };
+}
+
+/// Returns the day of the week for this CivilDate.
+pub fn dayOfWeek(self: CivilDate) DayOfWeek {
+    const days = daysSinceUnixEpoch(self.year, self.month, self.day);
+    const dow = @mod(days + 4, 7);
+    return @enumFromInt(@as(u3, @intCast(dow)));
+}
+
+/// Returns a new CivilDate offset by `days` days.
+pub fn addDays(self: CivilDate, days: i64) CivilDate {
+    const d = daysSinceUnixEpoch(self.year, self.month, self.day) + days;
+    return fromDays(d);
+}
+
+/// Returns a new CivilDate offset by `months` months, with day clamping.
+pub fn addMonths(self: CivilDate, months: i64) CivilDate {
+    const total_months = @as(i64, self.year) * 12 + @as(i64, self.month - 1) + months;
+    const new_year = @divFloor(total_months, 12);
+    const new_month = @as(i32, @intCast(@mod(total_months, 12) + 1));
+    var new_day = self.day;
+    const days_in_new_month = epoch.getDaysInMonth(@intCast(new_year), @enumFromInt(@as(u4, @intCast(new_month))));
+    if (new_day > days_in_new_month) new_day = @as(i32, @intCast(days_in_new_month));
+    return .{ .year = @intCast(new_year), .month = new_month, .day = new_day };
+}
+
+/// Returns a new CivilDate offset by `years` years, with leap-day clamping.
+pub fn addYears(self: CivilDate, years: i64) CivilDate {
+    const new_year: i64 = @as(i64, self.year) + years;
+    var new_day = self.day;
+    if (self.month == 2 and self.day == 29 and !epoch.isLeapYear(@intCast(new_year))) {
+        new_day = 28;
+    }
+    return .{ .year = @intCast(new_year), .month = self.month, .day = new_day };
+}
+
+/// Formats this CivilDate according to `fmt_str` (date-only strftime specifiers:
+/// `%Y`, `%m`, `%d`, `%B`, `%b`, `%A`, `%a`, `%%`). The returned slice is
+/// caller-owned and must be freed with `allocator`.
+pub fn format(self: CivilDate, allocator: std.mem.Allocator, fmt_str: []const u8) ![]u8 {
+    var aw: std.Io.Writer.Allocating = .init(allocator);
+    errdefer aw.deinit();
+    const writer = &aw.writer;
+
+    var i: usize = 0;
+    while (i < fmt_str.len) {
+        if (fmt_str[i] == '%') {
+            i += 1;
+            if (i >= fmt_str.len) {
+                try writer.writeAll("%");
+                break;
+            }
+            switch (fmt_str[i]) {
+                'Y' => try writer.print("{d:04}", .{@as(u32, @intCast(self.year))}),
+                'm' => try writer.print("{d:02}", .{@as(u32, @intCast(self.month))}),
+                'd' => try writer.print("{d:02}", .{@as(u32, @intCast(self.day))}),
+                'B' => try writer.writeAll(constants.month_names[@intCast(self.month - 1)]),
+                'b' => try writer.writeAll(constants.month_abbrs[@intCast(self.month - 1)]),
+                'A' => try writer.writeAll(constants.day_names[@intFromEnum(self.dayOfWeek())]),
+                'a' => try writer.writeAll(constants.day_abbrs[@intFromEnum(self.dayOfWeek())]),
+                '%' => try writer.writeAll("%"),
+                else => {
+                    try writer.writeAll("%");
+                    try writer.writeByte(fmt_str[i]);
+                },
+            }
+        } else {
+            try writer.writeByte(fmt_str[i]);
+        }
+        i += 1;
+    }
+    return aw.toOwnedSlice();
+}
+
+/// Returns true if the two CivilDates represent the same calendar date.
+pub fn eql(self: CivilDate, other: CivilDate) bool {
+    return self.year == other.year and self.month == other.month and self.day == other.day;
+}
+
+/// Returns the relative ordering of two CivilDates (chronological).
+pub fn order(self: CivilDate, other: CivilDate) std.math.Order {
+    return std.math.order(
+        daysSinceUnixEpoch(self.year, self.month, self.day),
+        daysSinceUnixEpoch(other.year, other.month, other.day),
+    );
+}
+
+/// Returns true if this CivilDate is chronologically before `other`.
+pub fn isBefore(self: CivilDate, other: CivilDate) bool {
+    return self.order(other) == .lt;
+}
+
+/// Returns true if this CivilDate is chronologically after `other`.
+pub fn isAfter(self: CivilDate, other: CivilDate) bool {
+    return self.order(other) == .gt;
+}
+
+/// Alias for `order`.
+pub fn compare(self: CivilDate, other: CivilDate) std.math.Order {
+    return self.order(other);
+}
+
+/// Creates a CivilDate from a DateTime, discarding time and offset.
+pub fn fromDateTime(dt: @import("DateTime.zig")) CivilDate {
+    return dt.toCivilDate();
 }
 
 /// Returns number of days since Unix epoch (1970-01-01)
@@ -161,4 +274,47 @@ test "roundtrip conversion" {
         try testing.expectEqual(original_date.day, final_date.day);
         try testing.expectEqual(i, days);
     }
+}
+
+test "CivilDate API additions" {
+    const testing = std.testing;
+    const allocator = testing.allocator;
+
+    // fromComponents + dayOfWeek
+    const cd = CivilDate.fromComponents(2023, 10, 27);
+    try testing.expectEqual(@as(i32, 2023), cd.year);
+    try testing.expectEqual(@as(i32, 10), cd.month);
+    try testing.expectEqual(@as(i32, 27), cd.day);
+    try testing.expectEqual(DayOfWeek.friday, cd.dayOfWeek());
+
+    // addDays / addMonths / addYears
+    const cd2 = cd.addDays(1);
+    try testing.expectEqual(@as(i32, 28), cd2.day);
+
+    const cd3 = cd.addMonths(1);
+    try testing.expectEqual(@as(i32, 11), cd3.month);
+    try testing.expectEqual(@as(i32, 27), cd3.day);
+
+    // Leap-year clamping
+    const leap = CivilDate.fromComponents(2024, 2, 29);
+    const leap_plus1 = leap.addYears(1);
+    try testing.expectEqual(@as(i32, 28), leap_plus1.day);
+    const leap_plus4 = leap.addYears(4);
+    try testing.expectEqual(@as(i32, 29), leap_plus4.day);
+
+    // format
+    try test_helpers.expectFormat(allocator, "Friday, October 27, 2023", cd.format(allocator, "%A, %B %d, %Y"));
+
+    // eql + ordering
+    const cd_same = CivilDate.fromComponents(2023, 10, 27);
+    const cd_later = CivilDate.fromComponents(2023, 10, 28);
+    try testing.expect(cd.eql(cd_same));
+    try testing.expect(cd.isBefore(cd_later));
+    try testing.expect(cd_later.isAfter(cd));
+    try testing.expectEqual(std.math.Order.lt, cd.order(cd_later));
+
+    // fromDateTime
+    const dt = @import("DateTime.zig").fromUnix(1_600_000_000, 0);
+    const cd4 = CivilDate.fromDateTime(dt);
+    try testing.expectEqual(cd4.year, dt.toCivilDate().year);
 }

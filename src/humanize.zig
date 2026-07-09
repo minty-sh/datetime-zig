@@ -76,101 +76,32 @@ test "humanize functions" {
     const testing = std.testing;
     const allocator = testing.allocator;
 
-    // Test humanizeFuture
-    const s1 = try humanizeFuture(1, allocator);
-    defer allocator.free(s1);
-    try testing.expectEqualStrings("in 1 second", s1);
+    const cases = [_]struct {
+        seconds: i64,
+        future: []const u8,
+        past: []const u8,
+    }{
+        .{ .seconds = 1, .future = "in 1 second", .past = "1 second ago" },
+        .{ .seconds = 59, .future = "in 59 seconds", .past = "59 seconds ago" },
+        .{ .seconds = 60, .future = "in 1 minute", .past = "1 minute ago" },
+        .{ .seconds = 60 * 59, .future = "in 59 minutes", .past = "59 minutes ago" },
+        .{ .seconds = 60 * 60, .future = "in 1 hour", .past = "1 hour ago" },
+        .{ .seconds = 60 * 60 * 23, .future = "in 23 hours", .past = "23 hours ago" },
+        .{ .seconds = 60 * 60 * 24, .future = "in 1 day", .past = "1 day ago" },
+        .{ .seconds = 60 * 60 * 24 * 29, .future = "in 29 days", .past = "29 days ago" },
+        .{ .seconds = 60 * 60 * 24 * 30, .future = "in 1 month", .past = "1 month ago" },
+        .{ .seconds = 60 * 60 * 24 * 30 * 11, .future = "in 11 months", .past = "11 months ago" },
+        .{ .seconds = 60 * 60 * 24 * 30 * 12, .future = "in 1 year", .past = "1 year ago" },
+        .{ .seconds = 60 * 60 * 24 * 30 * 12 * 2, .future = "in 2 years", .past = "2 years ago" },
+    };
 
-    const s59 = try humanizeFuture(59, allocator);
-    defer allocator.free(s59);
-    try testing.expectEqualStrings("in 59 seconds", s59);
+    for (cases) |c| {
+        const f = try humanizeFuture(c.seconds, allocator);
+        defer allocator.free(f);
+        try testing.expectEqualStrings(c.future, f);
 
-    const m1 = try humanizeFuture(60, allocator);
-    defer allocator.free(m1);
-    try testing.expectEqualStrings("in 1 minute", m1);
-
-    const m59 = try humanizeFuture(60 * 59, allocator);
-    defer allocator.free(m59);
-    try testing.expectEqualStrings("in 59 minutes", m59);
-
-    const h1 = try humanizeFuture(60 * 60, allocator);
-    defer allocator.free(h1);
-    try testing.expectEqualStrings("in 1 hour", h1);
-
-    const h23 = try humanizeFuture(60 * 60 * 23, allocator);
-    defer allocator.free(h23);
-    try testing.expectEqualStrings("in 23 hours", h23);
-
-    const d1 = try humanizeFuture(60 * 60 * 24, allocator);
-    defer allocator.free(d1);
-    try testing.expectEqualStrings("in 1 day", d1);
-
-    const d29 = try humanizeFuture(60 * 60 * 24 * 29, allocator);
-    defer allocator.free(d29);
-    try testing.expectEqualStrings("in 29 days", d29);
-
-    const mo1 = try humanizeFuture(60 * 60 * 24 * 30, allocator);
-    defer allocator.free(mo1);
-    try testing.expectEqualStrings("in 1 month", mo1);
-
-    const mo11 = try humanizeFuture(60 * 60 * 24 * 30 * 11, allocator);
-    defer allocator.free(mo11);
-    try testing.expectEqualStrings("in 11 months", mo11);
-
-    const y1 = try humanizeFuture(60 * 60 * 24 * 30 * 12, allocator);
-    defer allocator.free(y1);
-    try testing.expectEqualStrings("in 1 year", y1);
-
-    const y2 = try humanizeFuture(60 * 60 * 24 * 30 * 12 * 2, allocator);
-    defer allocator.free(y2);
-    try testing.expectEqualStrings("in 2 years", y2);
-
-    // Test humanizePast
-    const s1_past = try humanizePast(1, allocator);
-    defer allocator.free(s1_past);
-    try testing.expectEqualStrings("1 second ago", s1_past);
-
-    const s59_past = try humanizePast(59, allocator);
-    defer allocator.free(s59_past);
-    try testing.expectEqualStrings("59 seconds ago", s59_past);
-
-    const m1_past = try humanizePast(60, allocator);
-    defer allocator.free(m1_past);
-    try testing.expectEqualStrings("1 minute ago", m1_past);
-
-    const m59_past = try humanizePast(60 * 59, allocator);
-    defer allocator.free(m59_past);
-    try testing.expectEqualStrings("59 minutes ago", m59_past);
-
-    const h1_past = try humanizePast(60 * 60, allocator);
-    defer allocator.free(h1_past);
-    try testing.expectEqualStrings("1 hour ago", h1_past);
-
-    const h23_past = try humanizePast(60 * 60 * 23, allocator);
-    defer allocator.free(h23_past);
-    try testing.expectEqualStrings("23 hours ago", h23_past);
-
-    const d1_past = try humanizePast(60 * 60 * 24, allocator);
-    defer allocator.free(d1_past);
-    try testing.expectEqualStrings("1 day ago", d1_past);
-
-    const d29_past = try humanizePast(60 * 60 * 24 * 29, allocator);
-    defer allocator.free(d29_past);
-    try testing.expectEqualStrings("29 days ago", d29_past);
-
-    const mo1_past = try humanizePast(60 * 60 * 24 * 30, allocator);
-    defer allocator.free(mo1_past);
-    try testing.expectEqualStrings("1 month ago", mo1_past);
-
-    const mo11_past = try humanizePast(60 * 60 * 24 * 30 * 11, allocator);
-    defer allocator.free(mo11_past);
-    try testing.expectEqualStrings("11 months ago", mo11_past);
-
-    const y1_past = try humanizePast(60 * 60 * 24 * 30 * 12, allocator);
-    defer allocator.free(y1_past);
-    try testing.expectEqualStrings("1 year ago", y1_past);
-
-    const y2_past = try humanizePast(60 * 60 * 24 * 30 * 12 * 2, allocator);
-    defer allocator.free(y2_past);
-    try testing.expectEqualStrings("2 years ago", y2_past);
+        const p = try humanizePast(c.seconds, allocator);
+        defer allocator.free(p);
+        try testing.expectEqualStrings(c.past, p);
+    }
 }

@@ -2,14 +2,17 @@ const std = @import("std");
 pub const DateTime = @import("DateTime.zig");
 pub const CivilDate = @import("CivilDate.zig");
 
-pub const DayOfWeek = DateTime.time_units.DayOfWeek;
+pub const time_units = DateTime.time_units;
+pub const DayOfWeek = time_units.DayOfWeek;
 pub const Duration = DateTime.Duration;
+
+const test_helpers = @import("test_helpers.zig");
 
 test "DateTime diff" {
     const dt1 = DateTime.fromUnix(1000, 0);
     const dt2 = DateTime.fromUnix(500, 0);
     const d = dt1.diff(dt2);
-    try std.testing.expectEqual(@as(i64, 500), d.seconds);
+    try std.testing.expectEqual(@as(i64, 500), d.asSeconds());
 
     const dt3 = dt1.sub(d);
     try std.testing.expectEqual(dt2.unix_secs, dt3.unix_secs);
@@ -115,25 +118,21 @@ test "Final Features" {
 
     // strftime
     const dt1 = try DateTime.fromComponents(2023, 10, 27, 10, 30, 5, 0);
-    const s1 = try dt1.strftime(allocator, "%A, %B %d, %Y");
-    defer allocator.free(s1);
-    try std.testing.expectEqualStrings("Friday, October 27, 2023", s1);
+    try test_helpers.expectFormat(allocator, "Friday, October 27, 2023", dt1.strftime(allocator, "%A, %B %d, %Y"));
 
     // humanize
     const now = try DateTime.fromComponents(2023, 10, 27, 10, 0, 0, 0);
     const five_min_ago = now.sub(Duration.fromSeconds(5 * 60));
-    const s2 = try five_min_ago.toHumanString(now, allocator);
-    defer allocator.free(s2);
-    try std.testing.expectEqualStrings("5 minutes ago", s2);
+    try test_helpers.expectFormat(allocator, "5 minutes ago", five_min_ago.toHumanString(now, allocator));
 
     // IANA Timezone
     const dt_utc = try DateTime.fromComponents(2023, 11, 5, 10, 0, 0, 0);
     switch (@import("builtin").os.tag) {
         // TODO: don't know if macOS has tzdata
         .linux => {
-            var io_threaded = std.Io.Threaded.init(std.testing.allocator, .{});
-            defer io_threaded.deinit();
-            const io = io_threaded.io();
+            var ti = test_helpers.makeTestIo(std.testing.allocator);
+            defer ti.threaded.deinit();
+            const io = ti.io;
             const dt_ny = dt_utc.toTimezone(io, allocator, "America/New_York") catch |err| {
                 if (err == error.FileNotFound or err == DateTime.Error.NoTimetypeFound) return; // skip test if tzdata not found
                 return err;
@@ -145,4 +144,46 @@ test "Final Features" {
         },
         else => return,
     }
+}
+
+test "DateTime API additions" {
+    const testing = std.testing;
+    const allocator = testing.allocator;
+
+    // comparison / ordering
+    const a = DateTime.fromUnix(1000, 0);
+    const b = DateTime.fromUnix(2000, 0);
+    try testing.expect(a.eql(a));
+    try testing.expect(a.isBefore(b));
+    try testing.expect(b.isAfter(a));
+    try testing.expectEqual(std.math.Order.lt, a.order(b));
+    try testing.expectEqual(std.math.Order.gt, b.compare(a));
+
+    // utc + toUnix
+    const dt = DateTime.fromUnix(1_600_000_000, 3600);
+    try testing.expectEqual(@as(i64, 1_600_000_000), dt.toUnix());
+    const dt_utc = dt.utc();
+    try testing.expectEqual(@as(i32, 0), dt_utc.offset_seconds);
+
+    // fromCivilDate round-trips with toCivilDate
+    const dt2 = try DateTime.fromComponents(2023, 10, 27, 10, 30, 0, 0);
+    const cd = dt2.toCivilDate();
+    const dt2b = try DateTime.fromCivilDate(cd, 10, 30, 0, 0);
+    try testing.expect(dt2.eql(dt2b));
+
+    // HTTP date + ISO8601 (delegates to RFC3339, offset 0 -> Z)
+    try test_helpers.expectFormat(allocator, "Fri, 27 Oct 2023 10:30:00 GMT", dt2.formatHttp(allocator));
+    try test_helpers.expectFormat(allocator, "2023-10-27T10:30:00Z", dt2.formatISO8601(allocator));
+
+    // isoWeek named struct
+    const iw = try dt2.isoWeek();
+    try testing.expectEqual(@as(i32, 2023), iw.year);
+    try testing.expectEqual(@as(u8, 43), iw.week);
+
+    // now() returns a valid (positive) instant
+    var ti = test_helpers.makeTestIo(allocator);
+    defer ti.threaded.deinit();
+    const io = ti.io;
+    const now_dt = DateTime.now(io);
+    try testing.expect(now_dt.toUnix() > 0);
 }
