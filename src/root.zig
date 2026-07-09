@@ -81,19 +81,19 @@ test "DayOfWeek and Business Days" {
 test "ISO Week" {
     // 2023-10-27 is in week 43 of 2023
     const dt1 = try DateTime.fromComponents(2023, 10, 27, 0, 0, 0, 0);
-    const iw1 = try dt1.isoWeek();
+    const iw1 = dt1.isoWeek();
     try std.testing.expectEqual(2023, iw1.year);
     try std.testing.expectEqual(43, iw1.week);
 
     // 2021-01-01 is in week 53 of 2020
     const dt2 = try DateTime.fromComponents(2021, 1, 1, 0, 0, 0, 0);
-    const iw2 = try dt2.isoWeek();
+    const iw2 = dt2.isoWeek();
     try std.testing.expectEqual(2020, iw2.year);
     try std.testing.expectEqual(53, iw2.week);
 
     // 2010-01-03 was a Sunday, should be in week 53 of 2009
     const dt3 = try DateTime.fromComponents(2010, 1, 3, 0, 0, 0, 0);
-    const iw3 = try dt3.isoWeek();
+    const iw3 = dt3.isoWeek();
     try std.testing.expectEqual(2009, iw3.year);
     try std.testing.expectEqual(53, iw3.week);
 
@@ -248,9 +248,9 @@ test "DateTime API additions" {
     try test_helpers.expectFormat(allocator, "2023-10-27T10:30:00Z", dt2.formatISO8601(allocator));
 
     // isoWeek named struct
-    const iw = try dt2.isoWeek();
+    const iw = dt2.isoWeek();
     try testing.expectEqual(@as(i32, 2023), iw.year);
-    try testing.expectEqual(@as(u8, 43), iw.week);
+    try testing.expectEqual(@as(u6, 43), iw.week);
 
     // now() returns a valid (positive) instant
     var ti = test_helpers.makeTestIo(allocator);

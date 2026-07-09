@@ -17,13 +17,20 @@ pub const Error = error{
     InvalidDay,
     InvalidTime,
     InvalidOffset,
+    InvalidWeek,
     NoTimetypeFound,
 };
 
 /// An ISO 8601 week date: the ISO week-numbering year and the week number (1-53).
 pub const IsoWeek = struct {
     year: i32,
-    week: u8,
+    week: u6,
+
+    /// Creates an IsoWeek, validating that `week` is within the ISO range 1-53.
+    pub fn fromParts(year: i32, week: u8) !IsoWeek {
+        if (week < 1 or week > 53) return Error.InvalidWeek;
+        return .{ .year = year, .week = @intCast(week) };
+    }
 };
 
 /// Represents a specific point in time, with a Unix timestamp and an offset from UTC.
@@ -486,7 +493,7 @@ pub fn dayOfYear(self: @This()) u16 {
 }
 
 /// Returns the ISO week date (year and week number).
-pub fn isoWeek(self: @This()) !IsoWeek {
+pub fn isoWeek(self: @This()) IsoWeek {
     const dow = self.dayOfWeek();
     const iso_dow = if (dow == .sunday) 7 else @intFromEnum(dow);
 
@@ -495,7 +502,7 @@ pub fn isoWeek(self: @This()) !IsoWeek {
     const th_cd = thursday.toCivilDate();
     const iso_year = th_cd.year;
 
-    const first_day_of_iso_year = try fromComponents(iso_year, 1, 4, 0, 0, 0, 0);
+    const first_day_of_iso_year = fromComponents(iso_year, 1, 4, 0, 0, 0, 0) catch unreachable;
     const first_thursday_dow = first_day_of_iso_year.dayOfWeek();
     const first_thursday_iso_dow = if (first_thursday_dow == .sunday) 7 else @intFromEnum(first_thursday_dow);
 
@@ -506,6 +513,7 @@ pub fn isoWeek(self: @This()) !IsoWeek {
     const diff_days = @divFloor(diff_secs, 86400);
     const week_num = @divFloor(diff_days, 7) + 1;
 
+    std.debug.assert(week_num >= 1 and week_num <= 53);
     return .{ .year = iso_year, .week = @intCast(week_num) };
 }
 
