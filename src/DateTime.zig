@@ -37,6 +37,7 @@ offset_seconds: i32,
 
 /// Create from unix seconds + offset
 pub fn fromUnix(unix_secs: i64, offset_seconds: i32) DateTime {
+    std.debug.assert(offset_seconds >= -86400 and offset_seconds <= 86400);
     return .{
         .unix_secs = unix_secs,
         .offset_seconds = offset_seconds,
@@ -175,6 +176,9 @@ pub fn fromRfc3339(s: []const u8) !DateTime {
     const min_i = @as(i32, minute);
     const sec_i = @as(i32, second);
 
+    // Reject out-of-range time components (leap seconds, etc.) for consistency with fromComponents
+    if (h_i > 23 or min_i > 59 or sec_i > 59) return Error.InvalidTime;
+
     const days = CivilDate.daysSinceUnixEpoch(y_i, m_i, d_i);
     const local_secs: i64 = days * 86400 + @as(i64, h_i * 3600 + min_i * 60 + sec_i);
     const utc_secs: i64 = local_secs - @as(i64, offset_seconds);
@@ -279,23 +283,18 @@ pub fn formatISO8601(self: @This(), allocator: std.mem.Allocator) ![]u8 {
     return self.formatRfc3339(allocator);
 }
 pub fn formatDate(self: @This(), allocator: std.mem.Allocator) ![]u8 {
-    const local_secs = self.unix_secs + @as(i64, self.offset_seconds);
-    const days = @divFloor(local_secs, 86400);
-    const result = CivilDate.fromDays(days);
-    const y = result.year;
-    const m = result.month;
-    const d = result.day;
+    const cd = self.toCivilDate();
 
     const total = 10;
     var out = try allocator.alloc(u8, total);
     var idx: usize = 0;
-    parse.write4digits(out, &idx, @intCast(y));
+    parse.write4digits(out, &idx, @intCast(cd.year));
     out[idx] = '-';
     idx += 1;
-    parse.write2digits(out, &idx, @intCast(m));
+    parse.write2digits(out, &idx, @intCast(cd.month));
     out[idx] = '-';
     idx += 1;
-    parse.write2digits(out, &idx, @intCast(d));
+    parse.write2digits(out, &idx, @intCast(cd.day));
     return out;
 }
 
@@ -397,7 +396,7 @@ pub fn subWeeks(self: @This(), weeks: i64) DateTime {
 }
 
 /// Adds a specified number of months to the DateTime. Handles day clamping.
-pub fn addMonths(self: @This(), months: i64) !DateTime {
+pub fn addMonths(self: @This(), months: i64) DateTime {
     const cd = self.toCivilDate();
     const total_months = @as(i64, cd.year) * 12 + @as(i64, cd.month - 1) + months;
     const new_year: i64 = @divFloor(total_months, 12);
@@ -410,20 +409,18 @@ pub fn addMonths(self: @This(), months: i64) !DateTime {
     }
 
     const lc = self.local();
-    const hour = lc.hour;
-    const minute = lc.minute;
-    const second = lc.second;
-
-    return fromComponents(@intCast(new_year), new_month, @intCast(new_day), hour, minute, second, self.offset_seconds);
+    const days = CivilDate.daysSinceUnixEpoch(@intCast(new_year), @intCast(new_month), new_day);
+    const local_secs: i64 = days * 86400 + @as(i64, lc.hour) * 3600 + @as(i64, lc.minute) * 60 + @as(i64, lc.second);
+    return fromUnix(local_secs - @as(i64, self.offset_seconds), self.offset_seconds);
 }
 
 /// Subtracts a specified number of months from the DateTime.
-pub fn subMonths(self: @This(), months: i64) !DateTime {
+pub fn subMonths(self: @This(), months: i64) DateTime {
     return self.addMonths(-months);
 }
 
 /// Adds a specified number of years to the DateTime. Handles leap year day clamping.
-pub fn addYears(self: @This(), years: i64) !DateTime {
+pub fn addYears(self: @This(), years: i64) DateTime {
     const cd = self.toCivilDate();
     const new_year: i64 = @as(i64, cd.year) + years;
     var new_day = cd.day;
@@ -433,15 +430,13 @@ pub fn addYears(self: @This(), years: i64) !DateTime {
     }
 
     const lc = self.local();
-    const hour = lc.hour;
-    const minute = lc.minute;
-    const second = lc.second;
-
-    return fromComponents(@intCast(new_year), @intCast(cd.month), @intCast(new_day), hour, minute, second, self.offset_seconds);
+    const days = CivilDate.daysSinceUnixEpoch(@intCast(new_year), @intCast(cd.month), new_day);
+    const local_secs: i64 = days * 86400 + @as(i64, lc.hour) * 3600 + @as(i64, lc.minute) * 60 + @as(i64, lc.second);
+    return fromUnix(local_secs - @as(i64, self.offset_seconds), self.offset_seconds);
 }
 
 /// Subtracts a specified number of years from the DateTime.
-pub fn subYears(self: @This(), years: i64) !DateTime {
+pub fn subYears(self: @This(), years: i64) DateTime {
     return self.addYears(-years);
 }
 
@@ -543,14 +538,14 @@ pub fn round(self: @This(), unit: time_units.TimeUnit) !DateTime {
     switch (unit) {
         .year => {
             if (cd.month >= 7) {
-                return (try self.addYears(1)).truncate(.year);
+                return self.addYears(1).truncate(.year);
             }
             return self.truncate(.year);
         },
         .month => {
             const days_in_month = epoch.getDaysInMonth(@intCast(cd.year), @enumFromInt(cd.month));
             if (cd.day > days_in_month / 2) {
-                return (try self.addMonths(1)).truncate(.month);
+                return self.addMonths(1).truncate(.month);
             }
             return self.truncate(.month);
         },
@@ -599,25 +594,10 @@ pub fn strftime(self: @This(), allocator: std.mem.Allocator, fmt_str: []const u8
                 break;
             }
             switch (fmt_str[i]) {
-                'Y' => {
-                    const year: u32 = @intCast(cd.year);
-                    try writer.print("{d:04}", .{year});
-                },
-                'm' => {
-                    const month: u32 = @intCast(cd.month);
-                    try writer.print("{d:02}", .{month});
-                },
-                'd' => {
-                    const day: u32 = @intCast(cd.day);
-                    try writer.print("{d:02}", .{day});
-                },
                 'H' => try writer.print("{d:02}", .{hour}),
                 'M' => try writer.print("{d:02}", .{minute}),
                 'S' => try writer.print("{d:02}", .{second}),
-                'B' => try writer.writeAll(constants.month_names[@intCast(cd.month - 1)]),
-                'b' => try writer.writeAll(constants.month_abbrs[@intCast(cd.month - 1)]),
-                'A' => try writer.writeAll(constants.day_names[@intFromEnum(self.dayOfWeek())]),
-                'a' => try writer.writeAll(constants.day_abbrs[@intFromEnum(self.dayOfWeek())]),
+                'Y', 'm', 'd', 'B', 'b', 'A', 'a' => try parse.writeDateSpecifier(writer, fmt_str[i], cd),
                 '%' => try writer.writeAll("%"),
                 else => {
                     try writer.writeAll("%");

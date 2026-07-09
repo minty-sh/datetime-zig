@@ -1,7 +1,7 @@
 const std = @import("std");
 const epoch = std.time.epoch;
-const constants = @import("constants.zig");
 const DayOfWeek = @import("time_units.zig").DayOfWeek;
+const parse = @import("format_parse_helpers.zig");
 const test_helpers = @import("test_helpers.zig");
 
 /// Represents a civil date (year, month, day) without time components or timezone information.
@@ -118,13 +118,7 @@ pub fn format(self: CivilDate, allocator: std.mem.Allocator, fmt_str: []const u8
                 break;
             }
             switch (fmt_str[i]) {
-                'Y' => try writer.print("{d:04}", .{@as(u32, @intCast(self.year))}),
-                'm' => try writer.print("{d:02}", .{@as(u32, @intCast(self.month))}),
-                'd' => try writer.print("{d:02}", .{@as(u32, @intCast(self.day))}),
-                'B' => try writer.writeAll(constants.month_names[@intCast(self.month - 1)]),
-                'b' => try writer.writeAll(constants.month_abbrs[@intCast(self.month - 1)]),
-                'A' => try writer.writeAll(constants.day_names[@intFromEnum(self.dayOfWeek())]),
-                'a' => try writer.writeAll(constants.day_abbrs[@intFromEnum(self.dayOfWeek())]),
+                'Y', 'm', 'd', 'B', 'b', 'A', 'a' => try parse.writeDateSpecifier(writer, fmt_str[i], self),
                 '%' => try writer.writeAll("%"),
                 else => {
                     try writer.writeAll("%");
@@ -304,6 +298,9 @@ test "CivilDate API additions" {
 
     // format
     try test_helpers.expectFormat(allocator, "Friday, October 27, 2023", cd.format(allocator, "%A, %B %d, %Y"));
+    try test_helpers.expectFormat(allocator, "2023-10-27", cd.format(allocator, "%Y-%m-%d"));
+    try test_helpers.expectFormat(allocator, "Fri Oct 27", cd.format(allocator, "%a %b %d"));
+    try test_helpers.expectFormat(allocator, "%", cd.format(allocator, "%%"));
 
     // eql + ordering
     const cd_same = CivilDate.fromComponents(2023, 10, 27);

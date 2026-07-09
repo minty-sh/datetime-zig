@@ -33,6 +33,7 @@ pub const DayOfWeek = enum(u3) {
 
     /// Creates a DayOfWeek from an integer (0=sunday, 6=saturday).
     pub fn fromInt(n: u3) DayOfWeek {
+        std.debug.assert(n <= 6);
         return @enumFromInt(n);
     }
 };

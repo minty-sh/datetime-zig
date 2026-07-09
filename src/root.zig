@@ -32,7 +32,7 @@ test "Date Arithmetic" {
     try std.testing.expectEqual(1, cd2.day);
 
     // add months, with day clamping
-    const dt3 = try dt1.addMonths(1);
+    const dt3 = dt1.addMonths(1);
     const cd3 = dt3.toCivilDate();
     try std.testing.expectEqual(2023, cd3.year);
     try std.testing.expectEqual(2, cd3.month);
@@ -40,13 +40,13 @@ test "Date Arithmetic" {
 
     // add years, with leap day handling
     const dt4 = try DateTime.fromComponents(2024, 2, 29, 12, 0, 0, 0);
-    const dt5 = try dt4.addYears(1);
+    const dt5 = dt4.addYears(1);
     const cd5 = dt5.toCivilDate();
     try std.testing.expectEqual(2025, cd5.year);
     try std.testing.expectEqual(2, cd5.month);
     try std.testing.expectEqual(28, cd5.day);
 
-    const dt6 = try dt4.addYears(4);
+    const dt6 = dt4.addYears(4);
     const cd6 = dt6.toCivilDate();
     try std.testing.expectEqual(2028, cd6.year);
     try std.testing.expectEqual(2, cd6.month);
@@ -68,6 +68,14 @@ test "DayOfWeek and Business Days" {
     try std.testing.expectEqual(10, cd3.month);
     try std.testing.expectEqual(30, cd3.day);
     try std.testing.expectEqual(DayOfWeek.monday, dt3.dayOfWeek());
+
+    // Subtract 1 business day from Monday 30th -> Friday 27th
+    const dt4 = dt3.addBusinessDays(-1);
+    const cd4 = dt4.toCivilDate();
+    try std.testing.expectEqual(2023, cd4.year);
+    try std.testing.expectEqual(10, cd4.month);
+    try std.testing.expectEqual(27, cd4.day);
+    try std.testing.expectEqual(DayOfWeek.friday, dt4.dayOfWeek());
 }
 
 test "ISO Week" {
@@ -88,6 +96,16 @@ test "ISO Week" {
     const iw3 = try dt3.isoWeek();
     try std.testing.expectEqual(2009, iw3.year);
     try std.testing.expectEqual(53, iw3.week);
+
+    // Year-boundary dayOfYear: Dec 31 of a non-leap year is day 365
+    const dec31 = try DateTime.fromComponents(2023, 12, 31, 0, 0, 0, 0);
+    try std.testing.expectEqual(@as(u16, 365), dec31.dayOfYear());
+    const jan1 = try DateTime.fromComponents(2024, 1, 1, 0, 0, 0, 0);
+    try std.testing.expectEqual(@as(u16, 1), jan1.dayOfYear());
+
+    // Leap year: Dec 31 2024 is day 366
+    const dec31_leap = try DateTime.fromComponents(2024, 12, 31, 0, 0, 0, 0);
+    try std.testing.expectEqual(@as(u16, 366), dec31_leap.dayOfYear());
 }
 
 test "Truncate and Round" {
@@ -111,6 +129,58 @@ test "Truncate and Round" {
     }
     const rh_hour = @divFloor(rh_rem, 3600);
     try std.testing.expectEqual(11, rh_hour);
+
+    // Truncate all units
+    try std.testing.expectEqual(2023, (try dt.truncate(.year)).toCivilDate().year);
+    const trunc_month = try dt.truncate(.month);
+    try std.testing.expectEqual(10, trunc_month.toCivilDate().month);
+    try std.testing.expectEqual(1, trunc_month.toCivilDate().day);
+    const trunc_min = try dt.truncate(.minute);
+    try std.testing.expectEqual(30, @divFloor(@mod(trunc_min.unix_secs, 3600), 60));
+    const trunc_sec = try dt.truncate(.second);
+    try std.testing.expectEqual(45, @mod(trunc_sec.unix_secs, 60));
+
+    // Round all units
+    const round_year = try dt.round(.year); // month 10 >= 7 -> next year
+    try std.testing.expectEqual(2024, round_year.toCivilDate().year);
+    const round_month = try dt.round(.month); // day 27 > 15 -> next month
+    try std.testing.expectEqual(11, round_month.toCivilDate().month);
+    const round_min = try dt.round(.minute); // sec 45 >= 30 -> next minute
+    try std.testing.expectEqual(31, @divFloor(@mod(round_min.unix_secs, 3600), 60));
+}
+
+test "Strftime specifiers" {
+    const allocator = std.testing.allocator;
+    const dt = try DateTime.fromComponents(2023, 10, 27, 10, 30, 45, 0);
+
+    try test_helpers.expectFormat(allocator, "2023", dt.strftime(allocator, "%Y"));
+    try test_helpers.expectFormat(allocator, "10", dt.strftime(allocator, "%m"));
+    try test_helpers.expectFormat(allocator, "27", dt.strftime(allocator, "%d"));
+    try test_helpers.expectFormat(allocator, "10", dt.strftime(allocator, "%H"));
+    try test_helpers.expectFormat(allocator, "30", dt.strftime(allocator, "%M"));
+    try test_helpers.expectFormat(allocator, "45", dt.strftime(allocator, "%S"));
+    try test_helpers.expectFormat(allocator, "October", dt.strftime(allocator, "%B"));
+    try test_helpers.expectFormat(allocator, "Oct", dt.strftime(allocator, "%b"));
+    try test_helpers.expectFormat(allocator, "Friday", dt.strftime(allocator, "%A"));
+    try test_helpers.expectFormat(allocator, "Fri", dt.strftime(allocator, "%a"));
+    try test_helpers.expectFormat(allocator, "%", dt.strftime(allocator, "%%"));
+    try test_helpers.expectFormat(allocator, "2023-10-27T10:30:45", dt.strftime(allocator, "%Y-%m-%dT%H:%M:%S"));
+}
+
+test "Rfc3339 offsets round-trip" {
+    const allocator = std.testing.allocator;
+
+    const z = try DateTime.fromRfc3339("2023-10-27T10:30:00Z");
+    try test_helpers.expectFormat(allocator, "2023-10-27T10:30:00Z", z.formatRfc3339(allocator));
+
+    const plus = try DateTime.fromRfc3339("2023-10-27T10:30:00+05:30");
+    try test_helpers.expectFormat(allocator, "2023-10-27T10:30:00+05:30", plus.formatRfc3339(allocator));
+
+    const minus = try DateTime.fromRfc3339("2023-10-27T10:30:00-08:00");
+    try test_helpers.expectFormat(allocator, "2023-10-27T10:30:00-08:00", minus.formatRfc3339(allocator));
+
+    // Seconds are validated: a leap second must be rejected
+    try std.testing.expectError(DateTime.Error.InvalidTime, DateTime.fromRfc3339("2023-10-27T10:30:60Z"));
 }
 
 test "Final Features" {
@@ -159,11 +229,13 @@ test "DateTime API additions" {
     try testing.expectEqual(std.math.Order.lt, a.order(b));
     try testing.expectEqual(std.math.Order.gt, b.compare(a));
 
-    // utc + toUnix
+    // utc + toUnix (including a pre-1970 instant)
     const dt = DateTime.fromUnix(1_600_000_000, 3600);
     try testing.expectEqual(@as(i64, 1_600_000_000), dt.toUnix());
     const dt_utc = dt.utc();
     try testing.expectEqual(@as(i32, 0), dt_utc.offset_seconds);
+    const pre = DateTime.fromUnix(-2_208_988_800, 0); // 1900-01-01T00:00:00Z
+    try testing.expectEqual(@as(i64, -2_208_988_800), pre.toUnix());
 
     // fromCivilDate round-trips with toCivilDate
     const dt2 = try DateTime.fromComponents(2023, 10, 27, 10, 30, 0, 0);

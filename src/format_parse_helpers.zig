@@ -1,4 +1,5 @@
 const std = @import("std");
+const constants = @import("constants.zig");
 
 pub const ParseError = error{BadFormat};
 
@@ -38,6 +39,21 @@ pub fn write2digits(buf: []u8, idx_ptr: *usize, n: u8) void {
     buf[i + 0] = charDigit(@intCast((n / 10) % 10));
     buf[i + 1] = charDigit(@intCast(n % 10));
     idx_ptr.* = i + 2;
+}
+
+/// Writes a single date `strftime` specifier (`%Y %m %d %B %b %A %a`) for `cd` to `writer`.
+/// Shared by `CivilDate.format` and `DateTime.strftime` to avoid duplicated switch logic.
+pub fn writeDateSpecifier(writer: anytype, spec: u8, cd: anytype) !void {
+    switch (spec) {
+        'Y' => try writer.print("{d:04}", .{@as(u32, @intCast(cd.year))}),
+        'm' => try writer.print("{d:02}", .{@as(u32, @intCast(cd.month))}),
+        'd' => try writer.print("{d:02}", .{@as(u32, @intCast(cd.day))}),
+        'B' => try writer.writeAll(constants.month_names[@intCast(cd.month - 1)]),
+        'b' => try writer.writeAll(constants.month_abbrs[@intCast(cd.month - 1)]),
+        'A' => try writer.writeAll(constants.day_names[@intFromEnum(cd.dayOfWeek())]),
+        'a' => try writer.writeAll(constants.day_abbrs[@intFromEnum(cd.dayOfWeek())]),
+        else => {},
+    }
 }
 
 test "expect" {
